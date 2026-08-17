@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*", "[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate release version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"; tag="${tag%%-*}"
+          toc=$(sed -n 's/^## Version:[[:space:]]*//p' HammerLink.toc | tr -d '[:space:]')
+          test "$tag" = "$toc"
+          release_date=$(sed -n 's/^## X-ReleaseDate:[[:space:]]*//p' HammerLink.toc)
+          grep -qE "^## \[$tag\] - $release_date$" CHANGELOG.md
+      - name: Extract release notes
+        run: |
+          tag="${GITHUB_REF_NAME#v}"; tag="${tag%%-*}"
+          awk -v v="$tag" '$0 ~ ("^## \\[" v "\\] - ") { inside=1; next } inside && /^## \\[/ { exit } inside { print }' CHANGELOG.md > RELEASE_NOTES.md
+          test -s RELEASE_NOTES.md
+      - name: Package and release
+        uses: BigWigsMods/packager@v2
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}

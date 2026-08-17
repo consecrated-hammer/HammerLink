@@ -1,0 +1,13 @@
+name: Lint
+on: [push, pull_request]
+jobs:
+  lua51:
+    runs-on: ubuntu-latest
+    container: nickblah/lua:5.1-luarocks
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -n1 luac -p
+      - run: |
+          awk '!/^[[:space:]]*(#|$)/ { if ($0 ~ /\.lua$/) print }' HammerLink.toc | tr '\\' '/' | sort > /tmp/in_toc
+          find . -name '*.lua' -not -path './.git/*' -printf '%P\n' | sort > /tmp/on_disk
+          diff -u /tmp/in_toc /tmp/on_disk

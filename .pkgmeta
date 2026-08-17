@@ -1,0 +1,16 @@
+package-as: HammerLink
+enable-nolib-creation: no
+
+manual-changelog:
+  filename: RELEASE_NOTES.md
+  markup-type: markdown
+
+license-output: LICENSE.txt
+
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta
+  - tests
+  - Copy-ToWoWAddons.local.ps1
+  - CHANGELOG.md

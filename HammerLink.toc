@@ -1,0 +1,19 @@
+## Interface: 120100
+## Title: HammerLink
+## Notes: Export exact in-game character, talent, equipment and Great Vault state for Consecrated Hammer.
+## Author: consecrated-hammer
+## Version: 0.1.0
+## X-ReleaseDate: 2026-08-17
+## Category-enUS: Data Export
+## SavedVariables: HammerLinkDB
+## IconTexture: Interface\Icons\INV_Misc_Note_01
+## X-License: GPL-3.0
+
+# Standalone compression. Both libraries are embedded; no installed addon is a dependency.
+Libs\LibStub\LibStub.lua
+Libs\LibDeflate\LibDeflate.lua
+
+Core.lua
+Export.lua
+UI.lua
+UI\Minimap.lua
