@@ -1,4 +1,8 @@
 local namespace = {}
+local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true }
+namespace.GetExportOptions = function() return exportOptions end
+namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
+namespace.GetDecorInventory = function() return { available = false, reason = "test client" } end
 
 LibStub = function()
     return {
@@ -65,7 +69,10 @@ C_Item = {
     end,
     GetItemInfo = function(link)
         local id = tonumber(link:match("item:(%d+)"))
-        return id == 2001 and "Bag Helm" or "Item", link, 4, 701, 80, "Armor", "Plate", 1, "INVTYPE_HEAD", 12345, 4, 4, 2, 10, 99, false
+        if id == 2002 then
+            return "Potion", link, 1, nil, nil, "Consumable", "Potion", 20, "", 21, 12, 0, 1, 0, 10, nil, "not-a-boolean"
+        end
+        return id == 2001 and "Bag Helm" or "Item", link, 4, 701, 80, "Armor", "Plate", 1, "INVTYPE_HEAD", 20, 12345, 4, 4, 2, 10, 99, false
     end,
     GetDetailedItemLevelInfo = function(link) return link:find("2001", 1, true) and 710 or 700 end,
     GetItemStats = function(link) return link:find("2001", 1, true) and { ITEM_MOD_STRENGTH_SHORT = 123, ITEM_MOD_HASTE_RATING_SHORT = 456 } or {} end,
@@ -75,12 +82,24 @@ C_Item = {
 }
 
 C_WeeklyRewards = nil
+C_CurrencyInfo = {
+    GetCurrencyListSize = function() return 2 end,
+    GetCurrencyListInfo = function(index)
+        if index == 1 then return { isHeader = true } end
+        return { currencyID = 3284, isHeader = false }
+    end,
+    GetCurrencyInfo = function(currencyID)
+        if currencyID == 3284 then
+            return { name = "Gilded Crest", quantity = 42, maxQuantity = 90, maxWeeklyQuantity = 30, quantityEarnedThisWeek = 12, totalEarned = 312, canEarnPerWeek = true, useTotalEarnedForMaxQty = true, isAccountWide = false, isAccountTransferable = true }
+        end
+    end,
+}
 
 assert(loadfile("Export.lua"))("HammerLink", namespace)
 local snapshot = namespace.BuildSnapshot()
 
 assert(#snapshot.equipment == 1, "expected equipped item export to remain intact")
-assert(#snapshot.bagEquipment == 2, "expected only equippable bag items")
+assert(#snapshot.bagEquipment == 3, "expected every occupied bag slot")
 
 local helm = snapshot.bagEquipment[1]
 assert(helm.bag == 0 and helm.slot == 1 and helm.itemID == 2001, "expected bag location and item ID")
@@ -90,8 +109,26 @@ assert(helm.stats.ITEM_MOD_STRENGTH_SHORT == 123, "expected resolved item stats"
 assert(helm.gems[1].itemID == 3001, "expected socketed gem details")
 assert(helm.durability.current == 77 and helm.durability.maximum == 100, "expected durability")
 assert(helm.equipmentSets == "Raid", "expected equipment-set membership")
+assert(helm.sellPrice == 12345 and helm.classID == 4 and helm.subclassID == 4, "expected item-info metadata in the correct return positions")
+assert(helm.bindType == 2 and helm.expansionID == 10 and helm.setID == 99, "expected item-info binding and set metadata")
+assert(helm.isCraftingReagent == false, "expected a boolean crafting-reagent flag to be retained")
 
-local reagentBagWeapon = snapshot.bagEquipment[2]
+local potion = snapshot.bagEquipment[2]
+assert(potion.bag == 0 and potion.slot == 2 and potion.itemID == 2002, "expected non-equippable bag item scan")
+assert(potion.stackCount == 3 and potion.inventoryType == nil, "expected item metadata for a consumable")
+assert(potion.isCraftingReagent == nil, "expected non-boolean reagent flag to be omitted")
+assert(potion.sellPrice == 12 and potion.classID == 0 and potion.subclassID == 1, "expected consumable metadata in the correct return positions")
+
+local reagentBagWeapon = snapshot.bagEquipment[3]
 assert(reagentBagWeapon.bag == 5 and reagentBagWeapon.itemID == 2003, "expected reagent bag scan")
+assert(snapshot.format == 2 and snapshot.exportOptions.currencyCaps and snapshot.exportOptions.decorInventory, "expected enabled export options metadata")
+assert(snapshot.decorInventory.available == false, "expected housing fallback to be preserved")
+assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
+
+exportOptions.bagItems = false
+exportOptions.vault = false
+local reducedSnapshot = namespace.BuildSnapshot()
+assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil, "expected disabled categories to be omitted")
+assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false, "expected omitted categories to be explicit")
 
 print("HammerLink export tests passed")

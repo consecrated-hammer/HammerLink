@@ -11,4 +11,6 @@ jobs:
           awk '!/^[[:space:]]*(#|$)/ { gsub(/\\/, "/"); if ($0 ~ /\.lua$/) print }' HammerLink.toc | sort > /tmp/in_toc
           find . -name '*.lua' -not -path './.git/*' -not -path './tests/*' -printf '%P\n' | sort > /tmp/on_disk
           diff -u /tmp/in_toc /tmp/on_disk
-      - run: lua tests/export_test.lua
+      - run: |
+          lua tests/export_test.lua
+          lua tests/core_test.lua

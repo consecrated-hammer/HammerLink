@@ -1,8 +1,8 @@
 ## Interface: 120100
 ## Title: HammerLink
-## Notes: Export exact in-game character, talent, equipment and Great Vault state for Consecrated Hammer.
+## Notes: Export selected in-game gear, Vault, currency-cap and Housing decor state for Consecrated Hammer.
 ## Author: consecrated-hammer
-## Version: 0.2.0
+## Version: 0.3.0
 ## X-ReleaseDate: 2026-08-21
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB

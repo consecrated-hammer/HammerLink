@@ -97,11 +97,15 @@ local function itemDetails(link, containerInfo)
         stackCount = containerInfo.stackCount,
         isBound = containerInfo.isBound,
     }
+    if value.itemType == "" then value.itemType = nil end
+    if value.itemSubType == "" then value.itemSubType = nil end
+    if value.inventoryType == "" then value.inventoryType = nil end
     addIfPresent(value, "name", containerInfo.itemName)
     addIfPresent(value, "quality", containerInfo.quality)
+    local canEquip = value.inventoryType ~= nil
 
     if C_Item.GetItemInfo then
-        local ok, name, _, quality, baseItemLevel, requiredLevel, _, _, _, _, sellPrice,
+        local ok, name, _, quality, baseItemLevel, requiredLevel, _, _, _, _, _, sellPrice,
             cachedClassID, cachedSubclassID, bindType, expansionID, setID, isCraftingReagent = pcall(C_Item.GetItemInfo, link)
         if ok then
             addIfPresent(value, "name", name)
@@ -114,16 +118,21 @@ local function itemDetails(link, containerInfo)
             addIfPresent(value, "bindType", bindType)
             addIfPresent(value, "expansionID", expansionID)
             addIfPresent(value, "setID", setID)
-            addIfPresent(value, "isCraftingReagent", isCraftingReagent)
+            -- The Retail client has returned non-boolean placeholders here for
+            -- uncached items. Do not let one odd reagent flag reject the whole
+            -- otherwise-valid export on the website.
+            if type(isCraftingReagent) == "boolean" then
+                value.isCraftingReagent = isCraftingReagent
+            end
         end
     end
 
-    if C_Item.GetDetailedItemLevelInfo then
+    if canEquip and C_Item.GetDetailedItemLevelInfo then
         local ok, itemLevel = pcall(C_Item.GetDetailedItemLevelInfo, link)
         if ok then addIfPresent(value, "itemLevel", itemLevel) end
     end
 
-    if C_Item.GetItemStats then
+    if canEquip and C_Item.GetItemStats then
         local ok, itemStats = pcall(C_Item.GetItemStats, link)
         if ok and type(itemStats) == "table" then
             local stats = {}
@@ -134,7 +143,7 @@ local function itemDetails(link, containerInfo)
         end
     end
 
-    if C_Item.GetItemGem then
+    if canEquip and C_Item.GetItemGem then
         local gems = {}
         for socket = 1, 4 do
             local ok, gemName, gemLink = pcall(C_Item.GetItemGem, link, socket)
@@ -177,25 +186,22 @@ local function bagEquipment()
                         if linkOK then link = itemLink end
                     end
                     if link then
-                        local _, _, _, inventoryType = C_Item.GetItemInfoInstant(link)
-                        if inventoryType and inventoryType ~= "" then
-                            local item = itemDetails(link, containerInfo)
-                            item.bag = bag
-                            item.slot = slot
+                        local item = itemDetails(link, containerInfo)
+                        item.bag = bag
+                        item.slot = slot
 
-                            if C_Container.GetContainerItemDurability then
-                                local durabilityOK, current, maximum = pcall(C_Container.GetContainerItemDurability, bag, slot)
-                                if durabilityOK and current ~= nil and maximum ~= nil then
-                                    item.durability = { current = current, maximum = maximum }
-                                end
+                        if item.inventoryType and C_Container.GetContainerItemDurability then
+                            local durabilityOK, current, maximum = pcall(C_Container.GetContainerItemDurability, bag, slot)
+                            if durabilityOK and current ~= nil and maximum ~= nil then
+                                item.durability = { current = current, maximum = maximum }
                             end
-                            if C_Container.GetContainerItemEquipmentSetInfo then
-                                local setOK, inSet, setList = pcall(C_Container.GetContainerItemEquipmentSetInfo, bag, slot)
-                                if setOK and inSet then addIfPresent(item, "equipmentSets", setList) end
-                            end
-
-                            result[#result + 1] = item
                         end
+                        if item.inventoryType and C_Container.GetContainerItemEquipmentSetInfo then
+                            local setOK, inSet, setList = pcall(C_Container.GetContainerItemEquipmentSetInfo, bag, slot)
+                            if setOK and inSet then addIfPresent(item, "equipmentSets", setList) end
+                        end
+
+                        result[#result + 1] = item
                     end
                 end
             end
@@ -248,16 +254,52 @@ local function vault()
     return snapshot
 end
 
+local function currencyCaps()
+    local result = {}
+    if not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyListSize or not C_CurrencyInfo.GetCurrencyListInfo then return result end
+    local ok, size = pcall(C_CurrencyInfo.GetCurrencyListSize)
+    if not ok or type(size) ~= "number" then return result end
+    for index = 1, size do
+        local listOK, listed = pcall(C_CurrencyInfo.GetCurrencyListInfo, index)
+        local currencyID = listOK and listed and listed.currencyID
+        if currencyID and not listed.isHeader then
+            local infoOK, info = pcall(C_CurrencyInfo.GetCurrencyInfo, currencyID)
+            if infoOK and info and (info.maxQuantity and info.maxQuantity > 0 or info.maxWeeklyQuantity and info.maxWeeklyQuantity > 0 or info.useTotalEarnedForMaxQty) then
+                result[#result + 1] = {
+                    currencyID = currencyID, name = info.name, quantity = info.quantity,
+                    iconFileID = info.iconFileID, maxQuantity = info.maxQuantity,
+                    maxWeeklyQuantity = info.maxWeeklyQuantity,
+                    quantityEarnedThisWeek = info.quantityEarnedThisWeek,
+                    totalEarned = info.totalEarned, canEarnPerWeek = info.canEarnPerWeek,
+                    useTotalEarnedForMaxQty = info.useTotalEarnedForMaxQty,
+                    isAccountWide = info.isAccountWide, isAccountTransferable = info.isAccountTransferable,
+                }
+            end
+        end
+    end
+    table.sort(result, function(a, b) return (a.name or "") < (b.name or "") end)
+    return result
+end
+
 function ns.BuildSnapshot()
-    return {
-        format = 1,
+    local options = ns.GetExportOptions()
+    local snapshot = {
+        format = 2,
         capturedAt = time(),
         character = character(),
-        equipment = equipment(),
-        bagEquipment = bagEquipment(),
-        talents = { importString = talentExport() },
-        vault = vault(),
+        exportOptions = {
+            equipment = ns.IsExportEnabled("equipment"), bagItems = ns.IsExportEnabled("bagItems"),
+            talents = ns.IsExportEnabled("talents"), vault = ns.IsExportEnabled("vault"),
+            currencyCaps = ns.IsExportEnabled("currencyCaps"), decorInventory = ns.IsExportEnabled("decorInventory"),
+        },
     }
+    if options.equipment ~= false then snapshot.equipment = equipment() end
+    if options.bagItems ~= false then snapshot.bagEquipment = bagEquipment() end
+    if options.talents ~= false then snapshot.talents = { importString = talentExport() } end
+    if options.vault ~= false then snapshot.vault = vault() end
+    if options.currencyCaps ~= false then snapshot.currencyCaps = currencyCaps() end
+    if options.decorInventory ~= false then snapshot.decorInventory = ns.GetDecorInventory() end
+    return snapshot
 end
 
 function ns.BuildExport()

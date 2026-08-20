@@ -50,12 +50,17 @@ function Minimap_:Create()
     button:SetScript("OnDragStop", function() button:SetScript("OnUpdate", nil); button.dragged = true end)
     button:SetScript("OnClick", function(_, mouseButton)
         if button.dragged then button.dragged = nil return end
-        if mouseButton == "LeftButton" then ns.ShowExport() else ns.Print("Left-click: export. Drag: move this icon.") end
+        if mouseButton == "LeftButton" then
+            ns.ShowExport()
+        else
+            ns.ShowAbout()
+        end
     end)
     button:SetScript("OnEnter", function()
         GameTooltip:SetOwner(button, "ANCHOR_LEFT")
         GameTooltip:SetText("HammerLink")
         GameTooltip:AddLine("Left-click: export", 0.85, 0.85, 0.85)
+        GameTooltip:AddLine("Right-click: about HammerLink", 0.85, 0.85, 0.85)
         GameTooltip:AddLine("Drag: move this icon", 0.85, 0.85, 0.85)
         GameTooltip:Show()
     end)

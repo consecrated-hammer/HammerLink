@@ -5,16 +5,25 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](LICENSE.txt)
 [![Client](https://img.shields.io/badge/client-retail-4c9a7a?style=flat-square)](https://worldofwarcraft.blizzard.com/)
 
-HammerLink is the local companion addon for Consecrated Hammer. Click its Consecrated Hammer minimap icon, or type `/hl export`, then paste the compact code into the site.
+HammerLink is the local companion addon for Consecrated Hammer. Left-click its
+Consecrated Hammer minimap icon, or type `/hammerlink export` (also `/hl
+export`), then paste the compact code into the site. Right-click the minimap
+icon or use `/hammerlink about` for version details, links and a highly useful
+link note. Use `/hammerlink options` to choose export categories; all are
+enabled by default, and each export records any category that was excluded.
 
 It reads the client’s live state, which the public Blizzard Profile API does not expose promptly or at all:
 
 - exact Great Vault activities, thresholds, progress, tiers and generated rewards;
 - currently equipped item links, including modifiers;
-- all equippable items in the backpack, equipped bags and reagent bag, including
-  full links, effective/base item level, type, quality, binding, durability,
-  equipment-set membership, gems and resolved stat values when available;
+- every occupied slot in the backpack, equipped bags and reagent bag, including
+  full links, stack size, type, quality, binding, sell value and available
+  item-level, durability, equipment-set, gem and resolved-stat details;
 - the active talent import string; and
+- capped currency records, including crests when listed by the client, with
+  current amounts and available weekly/seasonal cap and earned fields; and
+- owned Housing Catalog decor entries, including storage, placed and redeemable
+  counts (account housing data, when the client catalog has finished loading);
 - character identity, class, spec and item level at capture time.
 
 The addon makes no network requests. `HL1:` exports are a versioned JSON snapshot compressed with embedded LibDeflate and encoded for safe copy/paste. They are deliberately not encrypted: players should treat them as shareable character data.
