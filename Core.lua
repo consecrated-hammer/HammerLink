@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.1.0"
+ns.VERSION = "0.2.0"
 ns.PREFIX = "HL1:"
 
 function ns.Print(message)
@@ -30,7 +30,7 @@ SlashCmdList.HAMMERLINK = function(message)
     if command == "" or command == "export" then
         ns.ShowExport()
     elseif command == "help" then
-        ns.Print("/hl export — copy your current character and Vault state")
+        ns.Print("/hl export — copy your current character, equipped and bag gear, talents and Vault state")
     else
         ns.Print("Unknown command. Use /hl export.")
     end

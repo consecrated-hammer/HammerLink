@@ -2,11 +2,14 @@
 ## Title: HammerLink
 ## Notes: Export exact in-game character, talent, equipment and Great Vault state for Consecrated Hammer.
 ## Author: consecrated-hammer
-## Version: 0.1.0
-## X-ReleaseDate: 2026-08-17
+## Version: 0.2.0
+## X-ReleaseDate: 2026-08-20
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
-## IconTexture: Interface\Icons\INV_Misc_Note_01
+## IconTexture: Interface\AddOns\HammerLink\Textures\HammerLinkMain
+## X-Website: https://github.com/consecrated-hammer/HammerLink
+## X-CurseForge: https://www.curseforge.com/wow/addons/hammerlink
+## X-Curse-Project-ID: 1656375
 ## X-License: GPL-3.0
 
 # Standalone compression. Both libraries are embedded; no installed addon is a dependency.

@@ -4,7 +4,7 @@ local dialog
 
 local function createDialog()
     local f = CreateFrame("Frame", "HammerLinkExportFrame", UIParent, "BackdropTemplate")
-    f:SetSize(700, 190)
+    f:SetSize(760, 360)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
@@ -22,17 +22,28 @@ local function createDialog()
     help:SetPoint("TOPLEFT", 24, -45)
     help:SetPoint("TOPRIGHT", -24, -45)
     help:SetJustifyH("LEFT")
-    help:SetText("Copy this into Consecrated Hammer. It contains this character’s live gear, talent import and exact Great Vault state. It is local data: nothing is uploaded by the addon.")
+    help:SetText("Copy this into Consecrated Hammer. It contains equipped and bag gear, the active talent import and exact Great Vault state. It is local data: nothing is uploaded by the addon.")
 
-    local box = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 25, -78)
+    scroll:SetPoint("BOTTOMRIGHT", -42, 48)
+    local box = CreateFrame("EditBox", nil, scroll)
     box:SetMultiLine(true)
     box:SetAutoFocus(false)
     box:SetFontObject("ChatFontNormal")
-    box:SetPoint("TOPLEFT", 25, -78)
-    box:SetPoint("BOTTOMRIGHT", -25, 42)
+    box:SetWidth(680)
+    -- EditBox has no text-measurement API. A deliberately tall scroll child
+    -- avoids text escaping the viewport while retaining a usable Close button.
+    box:SetHeight(2048)
     box:SetTextInsets(8, 8, 8, 8)
     box:SetScript("OnEscapePressed", function() f:Hide() end)
+    scroll:SetScrollChild(box)
+    f.scroll = scroll
     f.box = box
+
+    local copyHint = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    copyHint:SetPoint("BOTTOMLEFT", 26, 18)
+    copyHint:SetText("Press Ctrl+C to copy")
 
     local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     close:SetSize(86, 22)
@@ -50,6 +61,7 @@ function ns.ShowExport()
     end
     dialog = dialog or createDialog()
     dialog.box:SetText(output)
+    dialog.scroll:SetVerticalScroll(0)
     dialog:Show()
     dialog.box:SetFocus()
     dialog.box:HighlightText()

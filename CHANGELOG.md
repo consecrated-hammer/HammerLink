@@ -2,6 +2,13 @@
 
 All notable changes to HammerLink are recorded here.
 
+## [0.2.0] - 2026-08-20
+
+### Added
+
+- Export all equippable gear found in the backpack, equipped bags and reagent
+  bag, with complete links and all safely available item metadata and stats.
+
 ## [0.1.0] - 2026-08-17
 
 ### Added

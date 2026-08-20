@@ -4,7 +4,7 @@ local addonName, ns = ...
 -- its position regardless of which other addons happen to supply libraries.
 ns.Minimap = {}
 local Minimap_ = ns.Minimap
-local ICON = "Interface\\AddOns\\HammerLink\\Textures\\HammerLink"
+local ICON = "Interface\\AddOns\\HammerLink\\Textures\\HammerLinkClean"
 local RADIUS = 80
 
 function Minimap_:Create()

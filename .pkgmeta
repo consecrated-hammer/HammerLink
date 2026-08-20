@@ -14,3 +14,7 @@ ignore:
   - tests
   - Copy-ToWoWAddons.local.ps1
   - CHANGELOG.md
+  # Project/source artwork is uploaded separately. Only the TGA textures used
+  # by the game belong in the addon archive.
+  - Textures/HammerLink-curseforge-400.png
+  - Textures/HammerLinkClean.png

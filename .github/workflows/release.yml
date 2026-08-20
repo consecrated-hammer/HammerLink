@@ -1,8 +1,14 @@
 name: Release
 
+# Tag a commit v1.0.0 (or 1.0.0) and this packages the addon and publishes it.
+# CurseForge upload requires CF_API_KEY in the repository secrets and the
+# X-Curse-Project-ID in HammerLink.toc. GitHub releases still work without the
+# CurseForge credential.
 on:
   push:
-    tags: ["v*", "[0-9]+.[0-9]+.[0-9]+"]
+    tags:
+      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: write
@@ -14,18 +20,50 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Validate release version
+
+      - name: Tag must match the TOC version
         run: |
-          tag="${GITHUB_REF_NAME#v}"; tag="${tag%%-*}"
-          toc=$(sed -n 's/^## Version:[[:space:]]*//p' HammerLink.toc | tr -d '[:space:]')
-          test "$tag" = "$toc"
+          tag="${GITHUB_REF_NAME#v}"
+          tag="${tag%%-*}"
+          toc=$(grep -oP '(?<=^## Version:\s).*' HammerLink.toc | tr -d '[:space:]')
+          echo "tag=$tag  toc=$toc"
+          if [ "$tag" != "$toc" ]; then
+            echo "::error::Tag $tag does not match '## Version: $toc' in HammerLink.toc."
+            exit 1
+          fi
+
+      - name: Check the changelog mentions this version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          tag="${tag%%-*}"
+          if ! grep -qE "^## \[$tag\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md needs a heading exactly '## [$tag] - YYYY-MM-DD'."
+            exit 1
+          fi
           release_date=$(sed -n 's/^## X-ReleaseDate:[[:space:]]*//p' HammerLink.toc)
-          grep -qE "^## \[$tag\] - $release_date$" CHANGELOG.md
-      - name: Extract release notes
+          if ! printf '%s' "$release_date" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+            echo "::error::HammerLink.toc needs X-ReleaseDate in YYYY-MM-DD form."
+            exit 1
+          fi
+          if ! grep -Fq "## [$tag] - $release_date" CHANGELOG.md; then
+            echo "::error::X-ReleaseDate $release_date does not match CHANGELOG.md for [$tag]."
+            exit 1
+          fi
+
+      - name: Extract this version's release notes
         run: |
-          tag="${GITHUB_REF_NAME#v}"; tag="${tag%%-*}"
-          awk -v v="$tag" '$0 ~ ("^## \\[" v "\\] - ") { inside=1; next } inside && /^## \\[/ { exit } inside { print }' CHANGELOG.md > RELEASE_NOTES.md
-          test -s RELEASE_NOTES.md
+          tag="${GITHUB_REF_NAME#v}"
+          tag="${tag%%-*}"
+          awk -v v="$tag" '
+            $0 ~ ("^## \\[" v "\\] - ") { inside = 1; next }
+            inside && /^## \[/ { exit }
+            inside { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::Extracted no release notes for $tag from CHANGELOG.md."
+            exit 1
+          fi
+
       - name: Package and release
         uses: BigWigsMods/packager@v2
         env:
