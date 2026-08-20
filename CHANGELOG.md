@@ -2,7 +2,7 @@
 
 All notable changes to HammerLink are recorded here.
 
-## [0.2.0] - 2026-08-20
+## [0.2.0] - 2026-08-21
 
 ### Added
 
