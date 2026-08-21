@@ -94,6 +94,7 @@ local function createOptionsDialog()
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
+    f:SetBackdropColor(0.025, 0.02, 0.04, 1)
     f:Hide()
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -149,6 +150,7 @@ end
 
 function ns.ShowOptions()
     optionsDialog = optionsDialog or createOptionsDialog()
+    if aboutDialog then aboutDialog:Hide() end
     for key, check in pairs(optionsDialog.checkboxes) do check:SetChecked(ns.IsExportEnabled(key)) end
     optionsDialog:Show()
 end
@@ -212,8 +214,8 @@ local function createAboutDialog()
     end)
 
     local options = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    options:SetSize(108, 24)
-    options:SetPoint("BOTTOM", 0, 29)
+    options:SetSize(174, 24)
+    options:SetPoint("BOTTOMLEFT", forge, "TOPLEFT", 0, 8)
     options:SetText("Export options")
     options:SetScript("OnClick", function() ns.ShowOptions() end)
 

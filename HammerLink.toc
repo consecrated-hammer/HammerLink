@@ -2,7 +2,7 @@
 ## Title: HammerLink
 ## Notes: Export selected in-game gear, Vault, currency-cap and Housing decor state for Consecrated Hammer.
 ## Author: consecrated-hammer
-## Version: 0.3.0
+## Version: 0.3.1
 ## X-ReleaseDate: 2026-08-21
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB

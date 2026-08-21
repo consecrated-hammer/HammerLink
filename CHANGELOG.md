@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-08-21
+
+- Moved **Export options** directly above **Forge another link** in the About
+  panel.
+- Opening Export options now closes the About panel, and the options dialog has
+  an opaque background so its controls remain legible.
+
 ## [0.3.0] - 2026-08-21
 
 - Added an all-enabled-by-default `/hammerlink options` panel for equipped

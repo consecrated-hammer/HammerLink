@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.3.0"
+ns.VERSION = "0.3.1"
 ns.PREFIX = "HL1:"
 
 local DEFAULT_OPTIONS = {
