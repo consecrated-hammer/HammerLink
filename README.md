@@ -22,8 +22,9 @@ It reads the client’s live state, which the public Blizzard Profile API does n
 - the active talent import string; and
 - capped currency records, including crests when listed by the client, with
   current amounts and available weekly/seasonal cap and earned fields; and
-- owned Housing Catalog decor entries, including storage, placed and redeemable
-  counts (account housing data, when the client catalog has finished loading);
+- the complete set of owned Housing Catalog decor entries, including storage,
+  placed and redeemable counts (account housing data, when the client catalog
+  has finished loading);
 - character identity, class, spec and item level at capture time.
 
 The addon makes no network requests. `HL1:` exports are a versioned JSON snapshot compressed with embedded LibDeflate and encoded for safe copy/paste. They are deliberately not encrypted: players should treat them as shareable character data.

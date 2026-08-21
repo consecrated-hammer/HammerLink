@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-08-21
+
+- Export the complete owned Housing Catalog instead of silently stopping at
+  1,024 distinct decor entries.
+- Pack decor rows in the export payload and let the site expand them after
+  validation, preserving names and ownership details while keeping one-code
+  copy and paste practical for large collections.
+
 ## [0.3.1] - 2026-08-21
 
 - Moved **Export options** directly above **Forge another link** in the About

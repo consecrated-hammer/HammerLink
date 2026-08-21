@@ -2,7 +2,10 @@ local namespace = {}
 local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
-namespace.GetDecorInventory = function() return { available = false, reason = "test client" } end
+namespace.GetDecorInventory = function() return {
+    available = true, truncated = false,
+    packedItems = { { 77, "Warm Chair", 228000, 134400, 2, 1, 0, 2, 3 } },
+} end
 
 LibStub = function()
     return {
@@ -121,8 +124,9 @@ assert(potion.sellPrice == 12 and potion.classID == 0 and potion.subclassID == 1
 
 local reagentBagWeapon = snapshot.bagEquipment[3]
 assert(reagentBagWeapon.bag == 5 and reagentBagWeapon.itemID == 2003, "expected reagent bag scan")
-assert(snapshot.format == 2 and snapshot.exportOptions.currencyCaps and snapshot.exportOptions.decorInventory, "expected enabled export options metadata")
-assert(snapshot.decorInventory.available == false, "expected housing fallback to be preserved")
+assert(snapshot.format == 3 and snapshot.exportOptions.currencyCaps and snapshot.exportOptions.decorInventory, "expected enabled export options metadata")
+assert(snapshot.decorInventory.available and snapshot.decorInventory.truncated == false, "expected complete housing inventory metadata")
+assert(snapshot.decorInventory.packedItems[1][1] == 77 and snapshot.decorInventory.packedItems[1][2] == "Warm Chair", "expected compact housing row")
 assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
 
 exportOptions.bagItems = false

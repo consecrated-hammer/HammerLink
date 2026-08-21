@@ -284,7 +284,7 @@ end
 function ns.BuildSnapshot()
     local options = ns.GetExportOptions()
     local snapshot = {
-        format = 2,
+        format = 3,
         capturedAt = time(),
         character = character(),
         exportOptions = {
