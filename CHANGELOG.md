@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.1] - 2026-08-23
+
+- Skip blank client objective labels so a valid quest-log export cannot be
+  rejected by the companion importer.
+
 ## [0.5.0] - 2026-08-23
 
 - Add an enabled-by-default current quest-log export with quest IDs, factual

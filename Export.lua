@@ -332,7 +332,7 @@ local function questLog()
                 if ok and type(objectives) == "table" then
                     for objectiveIndex, objective in ipairs(objectives) do
                         if objectiveIndex > 64 then break end
-                        if type(objective) == "table" and type(objective.text) == "string" then
+                        if type(objective) == "table" and type(objective.text) == "string" and objective.text ~= "" then
                             quest.objectives[#quest.objectives + 1] = {
                                 text = objective.text, type = objective.type,
                                 finished = objective.finished,

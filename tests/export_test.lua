@@ -96,7 +96,10 @@ C_QuestLog = {
     IsFailed = function() return false end,
     GetQuestWatchType = function(questID) return questID == 9001 and 1 or nil end,
     GetQuestObjectives = function(questID)
-        if questID == 9001 then return { { text = "Collect 2/5 void shards", type = "item", finished = false, numFulfilled = 2, numRequired = 5, objectiveType = 1 } } end
+        if questID == 9001 then return {
+            { text = "", type = "item", finished = false, numFulfilled = 0, numRequired = 1, objectiveType = 1 },
+            { text = "Collect 2/5 void shards", type = "item", finished = false, numFulfilled = 2, numRequired = 5, objectiveType = 1 },
+        } end
         return {}
     end,
     GetQuestTagInfo = function(questID) if questID == 9002 then return { tagName = "World Quest", tagID = 128, worldQuestType = 1, quality = 2, isElite = false, displayExpiration = true } end end,
