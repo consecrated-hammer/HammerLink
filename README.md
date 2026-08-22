@@ -19,9 +19,11 @@ It reads the client’s live state, which the public Blizzard Profile API does n
 - every occupied slot in the backpack, equipped bags and reagent bag, including
   full links, stack size, type, quality, binding, sell value and available
   item-level, durability, equipment-set, gem and resolved-stat details;
-- the active talent import string; and
+- the active talent import string;
 - capped currency records, including crests when listed by the client, with
-  current amounts and available weekly/seasonal cap and earned fields; and
+  current amounts and available weekly/seasonal cap and earned fields;
+- the current quest log, including objective progress, quest types, timers and
+  available map waypoints;
 - the complete set of owned Housing Catalog decor entries, including storage,
   placed and redeemable counts (account housing data, when the client catalog
   has finished loading);

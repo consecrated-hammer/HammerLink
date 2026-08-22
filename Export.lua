@@ -281,6 +281,98 @@ local function currencyCaps()
     return result
 end
 
+local function questLog()
+    local snapshot = { available = false, capturedAt = time(), entries = {}, truncated = false }
+    if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries or not C_QuestLog.GetInfo then
+        snapshot.reason = "The Retail quest log API is unavailable in this client."
+        return snapshot
+    end
+
+    local countOK, shownEntries, questCount = pcall(C_QuestLog.GetNumQuestLogEntries)
+    if not countOK or type(shownEntries) ~= "number" then
+        snapshot.reason = "The current quest log could not be read."
+        return snapshot
+    end
+
+    snapshot.available = true
+    snapshot.totalQuests = type(questCount) == "number" and questCount or nil
+    local limit = math.min(shownEntries, 256)
+    snapshot.truncated = shownEntries > limit
+    local seen = {}
+    for index = 1, limit do
+        local infoOK, info = pcall(C_QuestLog.GetInfo, index)
+        if infoOK and type(info) == "table" and not info.isHeader
+            and type(info.questID) == "number" and info.questID > 0
+            and type(info.title) == "string" and info.title ~= "" and not seen[info.questID] then
+            seen[info.questID] = true
+            local quest = {
+                questID = info.questID, logIndex = index, title = info.title,
+                level = info.level, difficultyLevel = info.difficultyLevel,
+                suggestedGroup = info.suggestedGroup, frequency = info.frequency,
+                campaignID = info.campaignID, questClassification = info.questClassification,
+                isTask = info.isTask, isBounty = info.isBounty, isStory = info.isStory,
+                isHidden = info.isHidden, isAutoComplete = info.isAutoComplete,
+                objectives = {},
+            }
+
+            if C_QuestLog.IsComplete then
+                local ok, value = pcall(C_QuestLog.IsComplete, info.questID)
+                if ok and type(value) == "boolean" then quest.isComplete = value end
+            end
+            if C_QuestLog.IsFailed then
+                local ok, value = pcall(C_QuestLog.IsFailed, info.questID)
+                if ok and type(value) == "boolean" then quest.isFailed = value end
+            end
+            if C_QuestLog.GetQuestWatchType then
+                local ok, value = pcall(C_QuestLog.GetQuestWatchType, info.questID)
+                if ok and type(value) == "number" then quest.watchType = value end
+            end
+            if C_QuestLog.GetQuestObjectives then
+                local ok, objectives = pcall(C_QuestLog.GetQuestObjectives, info.questID)
+                if ok and type(objectives) == "table" then
+                    for objectiveIndex, objective in ipairs(objectives) do
+                        if objectiveIndex > 64 then break end
+                        if type(objective) == "table" and type(objective.text) == "string" then
+                            quest.objectives[#quest.objectives + 1] = {
+                                text = objective.text, type = objective.type,
+                                finished = objective.finished,
+                                numFulfilled = objective.numFulfilled,
+                                numRequired = objective.numRequired,
+                                objectiveType = objective.objectiveType,
+                            }
+                        end
+                    end
+                end
+            end
+            if C_QuestLog.GetQuestTagInfo then
+                local ok, tag = pcall(C_QuestLog.GetQuestTagInfo, info.questID)
+                if ok and type(tag) == "table" and type(tag.tagName) == "string" then
+                    quest.tag = {
+                        name = tag.tagName, id = tag.tagID,
+                        worldQuestType = tag.worldQuestType, quality = tag.quality,
+                        tradeskillLineID = tag.tradeskillLineID,
+                        isElite = tag.isElite, displayExpiration = tag.displayExpiration,
+                    }
+                end
+            end
+            if C_QuestLog.GetNextWaypoint then
+                local ok, mapID, x, y = pcall(C_QuestLog.GetNextWaypoint, info.questID)
+                if ok and type(mapID) == "number" and type(x) == "number" and type(y) == "number" then
+                    quest.waypoint = { mapID = mapID, x = x, y = y }
+                end
+            end
+            if C_QuestLog.GetTimeAllowed then
+                local ok, totalTime, elapsedTime = pcall(C_QuestLog.GetTimeAllowed, info.questID)
+                if ok and type(totalTime) == "number" and type(elapsedTime) == "number" then
+                    quest.timer = { totalSeconds = totalTime, elapsedSeconds = elapsedTime }
+                end
+            end
+            snapshot.entries[#snapshot.entries + 1] = quest
+        end
+    end
+    return snapshot
+end
+
 function ns.BuildSnapshot()
     local options = ns.GetExportOptions()
     local snapshot = {
@@ -291,6 +383,7 @@ function ns.BuildSnapshot()
             equipment = ns.IsExportEnabled("equipment"), bagItems = ns.IsExportEnabled("bagItems"),
             talents = ns.IsExportEnabled("talents"), vault = ns.IsExportEnabled("vault"),
             currencyCaps = ns.IsExportEnabled("currencyCaps"), decorInventory = ns.IsExportEnabled("decorInventory"),
+            questLog = ns.IsExportEnabled("questLog"),
         },
     }
     if options.equipment ~= false then snapshot.equipment = equipment() end
@@ -299,6 +392,7 @@ function ns.BuildSnapshot()
     if options.vault ~= false then snapshot.vault = vault() end
     if options.currencyCaps ~= false then snapshot.currencyCaps = currencyCaps() end
     if options.decorInventory ~= false then snapshot.decorInventory = ns.GetDecorInventory() end
+    if options.questLog ~= false then snapshot.questLog = questLog() end
     return snapshot
 end
 

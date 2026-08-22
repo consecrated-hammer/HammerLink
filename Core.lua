@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.4.0"
+ns.VERSION = "0.5.0"
 ns.PREFIX = "HL1:"
 
 local DEFAULT_OPTIONS = {
@@ -12,6 +12,7 @@ local DEFAULT_OPTIONS = {
     vault = true,
     currencyCaps = true,
     decorInventory = true,
+    questLog = true,
 }
 
 function ns.GetExportOptions()

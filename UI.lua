@@ -86,11 +86,12 @@ local exportCategories = {
     { key = "vault", title = "Great Vault", detail = "Exact current in-game Vault progress and generated rewards." },
     { key = "currencyCaps", title = "Currency caps", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
     { key = "decorInventory", title = "Housing decor inventory", detail = "Owned Housing Catalog decor, including stored and placed counts." },
+    { key = "questLog", title = "Current quest log", detail = "Active quests, objective progress, quest types and available waypoints." },
 }
 
 local function createOptionsDialog()
     local f = CreateFrame("Frame", "HammerLinkOptionsFrame", UIParent, "BackdropTemplate")
-    f:SetSize(540, 430)
+    f:SetSize(540, 475)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })

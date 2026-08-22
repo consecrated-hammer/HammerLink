@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-08-23
+
+- Add an enabled-by-default current quest-log export with quest IDs, factual
+  objective progress, completion/failure and hidden/background flags, quest
+  classification, timers and available client waypoints.
+
 ## [0.4.0] - 2026-08-21
 
 - Export the complete owned Housing Catalog instead of silently stopping at

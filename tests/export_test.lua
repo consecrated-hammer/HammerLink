@@ -1,5 +1,5 @@
 local namespace = {}
-local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true }
+local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
 namespace.GetDecorInventory = function() return {
@@ -85,6 +85,24 @@ C_Item = {
 }
 
 C_WeeklyRewards = nil
+C_QuestLog = {
+    GetNumQuestLogEntries = function() return 3, 2 end,
+    GetInfo = function(index)
+        if index == 1 then return { isHeader = true, title = "Midnight" } end
+        if index == 2 then return { questID = 9001, title = "A Dark Errand", level = 80, difficultyLevel = 80, suggestedGroup = 3, frequency = 1, campaignID = 12, questClassification = 2, isHeader = false, isTask = false, isBounty = false, isStory = true, isHidden = false, isAutoComplete = false } end
+        return { questID = 9002, title = "Worldly Work", level = 80, difficultyLevel = 80, suggestedGroup = 0, frequency = 2, questClassification = 3, isHeader = false, isTask = true, isBounty = false, isStory = false, isHidden = true, isAutoComplete = true }
+    end,
+    IsComplete = function(questID) return questID == 9002 end,
+    IsFailed = function() return false end,
+    GetQuestWatchType = function(questID) return questID == 9001 and 1 or nil end,
+    GetQuestObjectives = function(questID)
+        if questID == 9001 then return { { text = "Collect 2/5 void shards", type = "item", finished = false, numFulfilled = 2, numRequired = 5, objectiveType = 1 } } end
+        return {}
+    end,
+    GetQuestTagInfo = function(questID) if questID == 9002 then return { tagName = "World Quest", tagID = 128, worldQuestType = 1, quality = 2, isElite = false, displayExpiration = true } end end,
+    GetNextWaypoint = function(questID) if questID == 9001 then return 2395, 0.42, 0.73 end end,
+    GetTimeAllowed = function(questID) if questID == 9002 then return 3600, 1200 end end,
+}
 C_CurrencyInfo = {
     GetCurrencyListSize = function() return 2 end,
     GetCurrencyListInfo = function(index)
@@ -128,11 +146,19 @@ assert(snapshot.format == 3 and snapshot.exportOptions.currencyCaps and snapshot
 assert(snapshot.decorInventory.available and snapshot.decorInventory.truncated == false, "expected complete housing inventory metadata")
 assert(snapshot.decorInventory.packedItems[1][1] == 77 and snapshot.decorInventory.packedItems[1][2] == "Warm Chair", "expected compact housing row")
 assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
+assert(snapshot.exportOptions.questLog and snapshot.questLog.available and #snapshot.questLog.entries == 2, "expected current quest log")
+assert(snapshot.questLog.totalQuests == 2, "expected quest count without header rows")
+local quest = snapshot.questLog.entries[1]
+assert(quest.questID == 9001 and quest.logIndex == 2 and quest.isComplete == false, "expected quest identity and completion")
+assert(quest.objectives[1].numFulfilled == 2 and quest.objectives[1].numRequired == 5, "expected quest objective progress")
+assert(quest.waypoint.mapID == 2395 and quest.waypoint.x == 0.42, "expected available quest waypoint")
+assert(snapshot.questLog.entries[2].isHidden and snapshot.questLog.entries[2].timer.elapsedSeconds == 1200, "expected hidden quest and timer metadata")
 
 exportOptions.bagItems = false
 exportOptions.vault = false
+exportOptions.questLog = false
 local reducedSnapshot = namespace.BuildSnapshot()
-assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil, "expected disabled categories to be omitted")
-assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false, "expected omitted categories to be explicit")
+assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil, "expected disabled categories to be omitted")
+assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false, "expected omitted categories to be explicit")
 
 print("HammerLink export tests passed")
