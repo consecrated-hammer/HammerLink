@@ -397,9 +397,44 @@ function ns.BuildSnapshot()
     return snapshot
 end
 
+local function countRecipes(professionRecipes)
+    local total = 0
+    for _, profession in ipairs((professionRecipes and professionRecipes.professions) or {}) do
+        total = total + #(profession.recipes or {})
+    end
+    return total
+end
+
+function ns.FormatExportSummary(snapshot)
+    local options = snapshot.exportOptions or {}
+    local parts = {}
+    local function add(label, enabled, count, unavailable)
+        if not enabled then
+            parts[#parts + 1] = label .. " omitted"
+        elseif unavailable then
+            parts[#parts + 1] = label .. " unavailable"
+        else
+            parts[#parts + 1] = label .. " " .. tostring(count or 0)
+        end
+    end
+    add("equipped", options.equipment, #(snapshot.equipment or {}))
+    add("bag items", options.bagItems, #(snapshot.bagEquipment or {}))
+    add("talents", options.talents, snapshot.talents and snapshot.talents.importString and 1 or 0)
+    add("Vault activities", options.vault, snapshot.vault and #(snapshot.vault.activities or {}) or 0)
+    add("currency caps", options.currencyCaps, #(snapshot.currencyCaps or {}))
+    local decor = snapshot.decorInventory
+    add("decor", options.decorInventory, decor and #(decor.packedItems or decor.items or {}) or 0, decor and decor.available == false)
+    local quests = snapshot.questLog
+    add("quests", options.questLog, quests and #(quests.entries or {}) or 0, quests and quests.available == false)
+    local recipes = snapshot.professionRecipes
+    add("learned recipes", options.professionRecipes, countRecipes(recipes), recipes and recipes.available == false)
+    return "exported — " .. table.concat(parts, "; ")
+end
+
 function ns.BuildExport()
-    local json = encode(ns.BuildSnapshot())
+    local snapshot = ns.BuildSnapshot()
+    local json = encode(snapshot)
     local compressed = LibDeflate:CompressDeflate(json, { level = 9 })
     assert(compressed, "could not compress export")
-    return ns.PREFIX .. LibDeflate:EncodeForPrint(compressed), #json
+    return ns.PREFIX .. LibDeflate:EncodeForPrint(compressed), #json, snapshot
 end

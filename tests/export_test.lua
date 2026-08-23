@@ -156,6 +156,9 @@ assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].
 assert(snapshot.exportOptions.questLog and snapshot.questLog.available and #snapshot.questLog.entries == 2, "expected current quest log")
 assert(snapshot.exportOptions.professionRecipes and snapshot.professionRecipes.available, "expected learned profession recipe export")
 assert(snapshot.professionRecipes.professions[1].recipes[1].recipeID == 1261659, "expected cached learned recipe")
+local summary = namespace.FormatExportSummary(snapshot)
+assert(summary:find("equipped 1", 1, true) and summary:find("bag items 3", 1, true), "expected chat export counts")
+assert(summary:find("learned recipes 1", 1, true), "expected learned recipe count in chat summary")
 assert(snapshot.questLog.totalQuests == 2, "expected quest count without header rows")
 local quest = snapshot.questLog.entries[1]
 assert(quest.questID == 9001 and quest.logIndex == 2 and quest.isComplete == false, "expected quest identity and completion")
@@ -170,5 +173,6 @@ exportOptions.professionRecipes = false
 local reducedSnapshot = namespace.BuildSnapshot()
 assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
 assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
+assert(namespace.FormatExportSummary(reducedSnapshot):find("bag items omitted", 1, true), "expected omitted category in chat summary")
 
 print("HammerLink export tests passed")

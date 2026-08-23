@@ -65,7 +65,7 @@ local function createDialog()
 end
 
 function ns.ShowExport()
-    local ok, output, rawLength = pcall(ns.BuildExport)
+    local ok, output, rawLength, snapshot = pcall(ns.BuildExport)
     if not ok then
         ns.Print("Export failed: " .. tostring(output))
         return
@@ -77,6 +77,7 @@ function ns.ShowExport()
     dialog.box:SetFocus()
     dialog.box:HighlightText()
     ns.Print(("export ready — %d characters after compression"):format(#output))
+    ns.Print(ns.FormatExportSummary(snapshot))
 end
 
 local exportCategories = {
