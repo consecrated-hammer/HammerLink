@@ -138,11 +138,21 @@ end
 local function professionRecipeCache(create)
     local characterKey = currentCharacterKey()
     if not characterKey then return nil end
-    ns.db.professionRecipesByCharacter = ns.db.professionRecipesByCharacter or {}
-    local cache = ns.db.professionRecipesByCharacter[characterKey]
+    local caches = ns.db.professionRecipesByCharacter
+    if not caches and not create then return nil end
+    if not caches then
+        -- The short-lived development build wrote one account-wide recipe
+        -- cache. It has no character provenance, so carrying it forward would
+        -- risk assigning recipes to the wrong character. Re-open professions
+        -- once to repopulate the safe per-character cache instead.
+        ns.db.professionRecipes = nil
+        caches = {}
+        ns.db.professionRecipesByCharacter = caches
+    end
+    local cache = caches[characterKey]
     if not cache and create then
         cache = { lines = {}, truncated = false, recipeCount = 0 }
-        ns.db.professionRecipesByCharacter[characterKey] = cache
+        caches[characterKey] = cache
     end
     return cache
 end

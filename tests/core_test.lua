@@ -32,7 +32,10 @@ C_TradeSkillUI = {
 assert(loadfile("Core.lua"))("HammerLink", namespace)
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
+assert(namespace.GetProfessionRecipes().available == false and namespace.db.professionRecipesByCharacter == nil, "expected an uncached export read to avoid SavedVariables writes")
+namespace.db.professionRecipes = { lines = { stale = { recipes = { old = { recipeID = 1, name = "Unsafe legacy cache" } } } } }
 assert(namespace.CaptureProfessionRecipes(), "expected opened profession recipes to be cached")
+assert(namespace.db.professionRecipes == nil, "expected unsafe shared development cache to be discarded")
 local professions = namespace.GetProfessionRecipes()
 assert(professions.available and #professions.professions == 1, "expected profession cache export")
 assert(professions.professions[1].name == "Classic Jewelcrafting", "expected skill line name")

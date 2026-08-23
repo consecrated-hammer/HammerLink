@@ -8,6 +8,8 @@
   never treated as missing recipes.
 - Print an export-summary chat line with counts for every included category and
   an explicit omitted or unavailable state where a count would be misleading.
+- The pre-release shared recipe cache is intentionally discarded on upgrade;
+  reopen each profession once to establish its safe per-character cache.
 
 ## [0.5.1] - 2026-08-23
 
