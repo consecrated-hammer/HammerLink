@@ -127,6 +127,26 @@ local function cachedRecipeCount(cache)
     return count
 end
 
+local function currentCharacterKey()
+    if not UnitFullName then return nil end
+    local name, realm = UnitFullName("player")
+    realm = realm or (GetRealmName and GetRealmName())
+    if type(name) ~= "string" or name == "" or type(realm) ~= "string" or realm == "" then return nil end
+    return name .. "@" .. realm
+end
+
+local function professionRecipeCache(create)
+    local characterKey = currentCharacterKey()
+    if not characterKey then return nil end
+    ns.db.professionRecipesByCharacter = ns.db.professionRecipesByCharacter or {}
+    local cache = ns.db.professionRecipesByCharacter[characterKey]
+    if not cache and create then
+        cache = { lines = {}, truncated = false, recipeCount = 0 }
+        ns.db.professionRecipesByCharacter[characterKey] = cache
+    end
+    return cache
+end
+
 -- Retail only exposes a recipe collection while a profession window is loaded.
 -- Cache the learned positives per character, never using an unseen recipe as a
 -- negative result.  GetAllRecipeIDs is used when the client exposes it; the
@@ -138,9 +158,11 @@ function ns.CaptureProfessionRecipes()
     local idsOK, recipeIDs = pcall(getRecipeIDs)
     if not idsOK or type(recipeIDs) ~= "table" then return false end
 
-    ns.db.professionRecipes = ns.db.professionRecipes or { lines = {}, truncated = false }
-    local cache = ns.db.professionRecipes
+    local cache = professionRecipeCache(true)
+    if not cache then return false end
     cache.lines = cache.lines or {}
+    local recipeCount = type(cache.recipeCount) == "number" and cache.recipeCount or cachedRecipeCount(cache)
+    cache.recipeCount = recipeCount
     local baseInfo = currentProfessionInfo()
     local source = C_TradeSkillUI.GetAllRecipeIDs and "all" or "filtered"
     local changed = false
@@ -153,7 +175,7 @@ function ns.CaptureProfessionRecipes()
                 local learnedOK, value = pcall(C_TradeSkillUI.IsRecipeProfessionLearned, recipeID)
                 learned = learnedOK and value == true
             end
-            if learned and type(recipeInfo.name) == "string" and recipeInfo.name ~= "" then
+            if learned and type(recipeInfo) == "table" and type(recipeInfo.name) == "string" and recipeInfo.name ~= "" then
                 local professionInfo = nil
                 if C_TradeSkillUI.GetProfessionInfoByRecipeID then
                     local professionOK, value = pcall(C_TradeSkillUI.GetProfessionInfoByRecipeID, recipeID)
@@ -182,8 +204,10 @@ function ns.CaptureProfessionRecipes()
                     line.source = source
                     line.capturedAt = time()
                     if not line.recipes[tostring(recipeID)] then
-                        if cachedRecipeCount(cache) < MAX_CACHED_PROFESSION_RECIPES then
+                        if recipeCount < MAX_CACHED_PROFESSION_RECIPES then
                             line.recipes[tostring(recipeID)] = { recipeID = recipeID, name = recipeInfo.name, learned = true }
+                            recipeCount = recipeCount + 1
+                            cache.recipeCount = recipeCount
                             changed = true
                         else
                             cache.truncated = true
@@ -198,7 +222,7 @@ function ns.CaptureProfessionRecipes()
 end
 
 function ns.GetProfessionRecipes()
-    local cache = ns.db and ns.db.professionRecipes
+    local cache = ns.db and professionRecipeCache(false)
     if not cache or type(cache.lines) ~= "table" or not next(cache.lines) then
         return {
             available = false, capturedAt = time(), professions = {},

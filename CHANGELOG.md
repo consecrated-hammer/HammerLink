@@ -6,6 +6,8 @@
   is opened, then include those positive observations in exports. Open each
   profession once; a profession that has not been opened is explicitly unknown,
   never treated as missing recipes.
+- Print an export-summary chat line with counts for every included category and
+  an explicit omitted or unavailable state where a count would be misleading.
 
 ## [0.5.1] - 2026-08-23
 

@@ -16,14 +16,15 @@ function GetAddOnMetadata(_, key)
 end
 function print(message) messages[#messages + 1] = message end
 function time() return 1787200000 end
+function UnitFullName() return "Bluehoof", "Dath'Remar" end
 C_Timer = { After = function(_, callback) callback() end }
 C_TradeSkillUI = {
-    GetAllRecipeIDs = function() return { 1261659, 1261660 } end,
+    GetAllRecipeIDs = function() return { 1261659, 1261660, 1261661 } end,
     GetRecipeInfo = function(recipeID)
         if recipeID == 1261659 then return { name = "Ironforge Chandelier", learned = true } end
-        return { name = "Unlearned Test", learned = false }
+        if recipeID == 1261660 then return { name = "Unlearned Test", learned = false } end
     end,
-    IsRecipeProfessionLearned = function(recipeID) return recipeID == 1261659 end,
+    IsRecipeProfessionLearned = function(recipeID) return recipeID == 1261659 or recipeID == 1261661 end,
     GetProfessionInfoByRecipeID = function() return { professionID = 755, professionName = "Jewelcrafting", expansionName = "Classic", skillLevel = 100, maxSkillLevel = 100 } end,
     GetTradeSkillLineForRecipe = function() return 755, "Classic Jewelcrafting" end,
 }
@@ -36,6 +37,9 @@ local professions = namespace.GetProfessionRecipes()
 assert(professions.available and #professions.professions == 1, "expected profession cache export")
 assert(professions.professions[1].name == "Classic Jewelcrafting", "expected skill line name")
 assert(#professions.professions[1].recipes == 1 and professions.professions[1].recipes[1].recipeID == 1261659, "expected learned-only recipe cache")
+UnitFullName = function() return "SecondCharacter", "Dath'Remar" end
+local secondCharacter = namespace.GetProfessionRecipes()
+assert(secondCharacter.available == false, "expected profession cache to stay scoped to the exporting character")
 
 local exports, about, options = 0, 0, 0
 namespace.ShowExport = function() exports = exports + 1 end
