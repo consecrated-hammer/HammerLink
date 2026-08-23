@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.6.0] - 2026-08-24
+## [0.6.0] - 2026-08-23
 
 - Cache learned profession recipes whenever the matching Retail profession panel
   is opened, then include those positive observations in exports. Open each

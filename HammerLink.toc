@@ -3,7 +3,7 @@
 ## Notes: Export selected in-game gear, Vault, currency-cap, Housing decor, quest-log and cached learned-recipe state for Consecrated Hammer.
 ## Author: consecrated-hammer
 ## Version: 0.6.0
-## X-ReleaseDate: 2026-08-24
+## X-ReleaseDate: 2026-08-23
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
 ## IconTexture: Interface\AddOns\HammerLink\Textures\HammerLinkMain
