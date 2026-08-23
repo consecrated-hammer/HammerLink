@@ -87,11 +87,12 @@ local exportCategories = {
     { key = "currencyCaps", title = "Currency caps", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
     { key = "decorInventory", title = "Housing decor inventory", detail = "Owned Housing Catalog decor, including stored and placed counts." },
     { key = "questLog", title = "Current quest log", detail = "Active quests, objective progress, quest types and available waypoints." },
+    { key = "professionRecipes", title = "Learned profession recipes", detail = "Cached when you open each profession; unopened professions remain unknown." },
 }
 
 local function createOptionsDialog()
     local f = CreateFrame("Frame", "HammerLinkOptionsFrame", UIParent, "BackdropTemplate")
-    f:SetSize(540, 475)
+    f:SetSize(540, 520)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })

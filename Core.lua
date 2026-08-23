@@ -2,8 +2,10 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.5.1"
+ns.VERSION = "0.6.0-dev"
 ns.PREFIX = "HL1:"
+
+local MAX_CACHED_PROFESSION_RECIPES = 8192
 
 local DEFAULT_OPTIONS = {
     equipment = true,
@@ -13,6 +15,7 @@ local DEFAULT_OPTIONS = {
     currencyCaps = true,
     decorInventory = true,
     questLog = true,
+    professionRecipes = true,
 }
 
 function ns.GetExportOptions()
@@ -94,6 +97,153 @@ function ns.GetDecorInventory()
     return ns.decorInventory or { available = false, reason = "Housing decor inventory is loading; wait a moment then export again." }
 end
 
+local function recipeLineName(info, fallback)
+    if type(fallback) == "string" and fallback ~= "" then return fallback end
+    if type(info) ~= "table" then return "Unknown profession" end
+    local professionName = type(info.professionName) == "string" and info.professionName or "Unknown profession"
+    local expansionName = type(info.expansionName) == "string" and info.expansionName or ""
+    if expansionName ~= "" and not professionName:find(expansionName, 1, true) then
+        return expansionName .. " " .. professionName
+    end
+    return professionName
+end
+
+local function currentProfessionInfo()
+    if not C_TradeSkillUI then return nil end
+    for _, getter in ipairs({ C_TradeSkillUI.GetChildProfessionInfo, C_TradeSkillUI.GetBaseProfessionInfo }) do
+        if getter then
+            local ok, info = pcall(getter)
+            if ok and type(info) == "table" and type(info.professionID) == "number" and info.professionID > 0 then return info end
+        end
+    end
+    return nil
+end
+
+local function cachedRecipeCount(cache)
+    local count = 0
+    for _, line in pairs(cache.lines or {}) do
+        for _ in pairs(type(line) == "table" and line.recipes or {}) do count = count + 1 end
+    end
+    return count
+end
+
+-- Retail only exposes a recipe collection while a profession window is loaded.
+-- Cache the learned positives per character, never using an unseen recipe as a
+-- negative result.  GetAllRecipeIDs is used when the client exposes it; the
+-- visible-profession fallback is marked filtered so consumers retain that fact.
+function ns.CaptureProfessionRecipes()
+    if not ns.db or not C_TradeSkillUI or not C_TradeSkillUI.GetRecipeInfo then return false end
+    local getRecipeIDs = C_TradeSkillUI.GetAllRecipeIDs or C_TradeSkillUI.GetFilteredRecipeIDs
+    if not getRecipeIDs then return false end
+    local idsOK, recipeIDs = pcall(getRecipeIDs)
+    if not idsOK or type(recipeIDs) ~= "table" then return false end
+
+    ns.db.professionRecipes = ns.db.professionRecipes or { lines = {}, truncated = false }
+    local cache = ns.db.professionRecipes
+    cache.lines = cache.lines or {}
+    local baseInfo = currentProfessionInfo()
+    local source = C_TradeSkillUI.GetAllRecipeIDs and "all" or "filtered"
+    local changed = false
+
+    for _, recipeID in ipairs(recipeIDs) do
+        if type(recipeID) == "number" and recipeID > 0 then
+            local infoOK, recipeInfo = pcall(C_TradeSkillUI.GetRecipeInfo, recipeID)
+            local learned = infoOK and type(recipeInfo) == "table" and recipeInfo.learned == true
+            if not learned and C_TradeSkillUI.IsRecipeProfessionLearned then
+                local learnedOK, value = pcall(C_TradeSkillUI.IsRecipeProfessionLearned, recipeID)
+                learned = learnedOK and value == true
+            end
+            if learned and type(recipeInfo.name) == "string" and recipeInfo.name ~= "" then
+                local professionInfo = nil
+                if C_TradeSkillUI.GetProfessionInfoByRecipeID then
+                    local professionOK, value = pcall(C_TradeSkillUI.GetProfessionInfoByRecipeID, recipeID)
+                    if professionOK and type(value) == "table" then professionInfo = value end
+                end
+                professionInfo = professionInfo or baseInfo
+                local skillLineID, skillLineName
+                if C_TradeSkillUI.GetTradeSkillLineForRecipe then
+                    local lineOK, lineID, lineName = pcall(C_TradeSkillUI.GetTradeSkillLineForRecipe, recipeID)
+                    if lineOK then skillLineID, skillLineName = lineID, lineName end
+                end
+                skillLineID = skillLineID or (professionInfo and professionInfo.professionID)
+                if type(skillLineID) == "number" and skillLineID > 0 then
+                    local key = tostring(skillLineID)
+                    local line = cache.lines[key]
+                    if not line then
+                        line = { skillLineID = skillLineID, recipes = {} }
+                        cache.lines[key] = line
+                    end
+                    line.professionID = (professionInfo and (professionInfo.parentProfessionID or professionInfo.professionID)) or line.professionID
+                    line.name = recipeLineName(professionInfo, skillLineName)
+                    line.professionName = professionInfo and professionInfo.professionName or line.professionName
+                    line.expansionName = professionInfo and professionInfo.expansionName or line.expansionName
+                    line.skillLevel = professionInfo and professionInfo.skillLevel or line.skillLevel
+                    line.maxSkillLevel = professionInfo and professionInfo.maxSkillLevel or line.maxSkillLevel
+                    line.source = source
+                    line.capturedAt = time()
+                    if not line.recipes[tostring(recipeID)] then
+                        if cachedRecipeCount(cache) < MAX_CACHED_PROFESSION_RECIPES then
+                            line.recipes[tostring(recipeID)] = { recipeID = recipeID, name = recipeInfo.name, learned = true }
+                            changed = true
+                        else
+                            cache.truncated = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if changed then cache.updatedAt = time() end
+    return changed
+end
+
+function ns.GetProfessionRecipes()
+    local cache = ns.db and ns.db.professionRecipes
+    if not cache or type(cache.lines) ~= "table" or not next(cache.lines) then
+        return {
+            available = false, capturedAt = time(), professions = {},
+            reason = "Open each profession window once to cache its learned recipes; uncached professions are unknown.",
+        }
+    end
+    local result = { available = true, capturedAt = cache.updatedAt or time(), professions = {}, truncated = cache.truncated == true }
+    local total = 0
+    for _, cachedLine in pairs(cache.lines) do
+        if type(cachedLine) == "table" and type(cachedLine.skillLineID) == "number" and type(cachedLine.recipes) == "table" then
+            local line = {
+                skillLineID = cachedLine.skillLineID, professionID = cachedLine.professionID,
+                name = cachedLine.name or "Unknown profession", professionName = cachedLine.professionName,
+                expansionName = cachedLine.expansionName, skillLevel = cachedLine.skillLevel,
+                maxSkillLevel = cachedLine.maxSkillLevel, source = cachedLine.source,
+                capturedAt = cachedLine.capturedAt, recipes = {},
+            }
+            for _, recipe in pairs(cachedLine.recipes) do
+                if total >= MAX_CACHED_PROFESSION_RECIPES then result.truncated = true break end
+                if type(recipe) == "table" and type(recipe.recipeID) == "number" and type(recipe.name) == "string" then
+                    line.recipes[#line.recipes + 1] = { recipeID = recipe.recipeID, name = recipe.name, learned = true }
+                    total = total + 1
+                end
+            end
+            table.sort(line.recipes, function(a, b) return a.name == b.name and a.recipeID < b.recipeID or a.name < b.name end)
+            if #line.recipes > 0 then result.professions[#result.professions + 1] = line end
+        end
+    end
+    table.sort(result.professions, function(a, b) return a.name == b.name and a.skillLineID < b.skillLineID or a.name < b.name end)
+    return result
+end
+
+function ns.QueueProfessionRecipeCapture()
+    if ns.professionCaptureQueued then return end
+    if not C_Timer or not C_Timer.After then
+        ns.CaptureProfessionRecipes()
+        return
+    end
+    ns.professionCaptureQueued = true
+    C_Timer.After(0, function()
+        ns.professionCaptureQueued = false
+        ns.CaptureProfessionRecipes()
+    end)
+end
+
 function ns.GetMetadata(key)
     return GetAddOnMetadata and GetAddOnMetadata(addonName, key)
 end
@@ -108,6 +258,8 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("HOUSING_STORAGE_UPDATED")
 frame:RegisterEvent("HOUSING_DECOR_PLACE_SUCCESS")
 frame:RegisterEvent("HOUSING_DECOR_REMOVED")
+frame:RegisterEvent("TRADE_SKILL_SHOW")
+frame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 frame:SetScript("OnEvent", function(_, event, loadedName)
     if event == "ADDON_LOADED" then
         if loadedName ~= addonName then return end
@@ -124,6 +276,8 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         ns.RefreshDecorInventory()
     elseif event == "HOUSING_STORAGE_UPDATED" or event == "HOUSING_DECOR_PLACE_SUCCESS" or event == "HOUSING_DECOR_REMOVED" then
         ns.RefreshDecorInventory()
+    elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" then
+        ns.QueueProfessionRecipeCapture()
     end
 end)
 

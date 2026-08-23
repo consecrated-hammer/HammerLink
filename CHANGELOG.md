@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Cache learned profession recipes whenever the matching Retail profession panel
+  is opened, then include those positive observations in exports. Open each
+  profession once; a profession that has not been opened is explicitly unknown,
+  never treated as missing recipes.
+
 ## [0.5.1] - 2026-08-23
 
 - Skip blank client objective labels so a valid quest-log export cannot be

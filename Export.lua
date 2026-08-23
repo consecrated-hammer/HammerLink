@@ -383,7 +383,7 @@ function ns.BuildSnapshot()
             equipment = ns.IsExportEnabled("equipment"), bagItems = ns.IsExportEnabled("bagItems"),
             talents = ns.IsExportEnabled("talents"), vault = ns.IsExportEnabled("vault"),
             currencyCaps = ns.IsExportEnabled("currencyCaps"), decorInventory = ns.IsExportEnabled("decorInventory"),
-            questLog = ns.IsExportEnabled("questLog"),
+            questLog = ns.IsExportEnabled("questLog"), professionRecipes = ns.IsExportEnabled("professionRecipes"),
         },
     }
     if options.equipment ~= false then snapshot.equipment = equipment() end
@@ -393,6 +393,7 @@ function ns.BuildSnapshot()
     if options.currencyCaps ~= false then snapshot.currencyCaps = currencyCaps() end
     if options.decorInventory ~= false then snapshot.decorInventory = ns.GetDecorInventory() end
     if options.questLog ~= false then snapshot.questLog = questLog() end
+    if options.professionRecipes ~= false then snapshot.professionRecipes = ns.GetProfessionRecipes() end
     return snapshot
 end
 

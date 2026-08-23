@@ -1,10 +1,14 @@
 local namespace = {}
-local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true }
+local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true, professionRecipes = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
 namespace.GetDecorInventory = function() return {
     available = true, truncated = false,
     packedItems = { { 77, "Warm Chair", 228000, 134400, 2, 1, 0, 2, 3 } },
+} end
+namespace.GetProfessionRecipes = function() return {
+    available = true, capturedAt = 1787200000, truncated = false,
+    professions = { { skillLineID = 755, professionID = 755, name = "Classic Jewelcrafting", recipes = { { recipeID = 1261659, name = "Ironforge Chandelier", learned = true } } } },
 } end
 
 LibStub = function()
@@ -150,6 +154,8 @@ assert(snapshot.decorInventory.available and snapshot.decorInventory.truncated =
 assert(snapshot.decorInventory.packedItems[1][1] == 77 and snapshot.decorInventory.packedItems[1][2] == "Warm Chair", "expected compact housing row")
 assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
 assert(snapshot.exportOptions.questLog and snapshot.questLog.available and #snapshot.questLog.entries == 2, "expected current quest log")
+assert(snapshot.exportOptions.professionRecipes and snapshot.professionRecipes.available, "expected learned profession recipe export")
+assert(snapshot.professionRecipes.professions[1].recipes[1].recipeID == 1261659, "expected cached learned recipe")
 assert(snapshot.questLog.totalQuests == 2, "expected quest count without header rows")
 local quest = snapshot.questLog.entries[1]
 assert(quest.questID == 9001 and quest.logIndex == 2 and quest.isComplete == false, "expected quest identity and completion")
@@ -160,8 +166,9 @@ assert(snapshot.questLog.entries[2].isHidden and snapshot.questLog.entries[2].ti
 exportOptions.bagItems = false
 exportOptions.vault = false
 exportOptions.questLog = false
+exportOptions.professionRecipes = false
 local reducedSnapshot = namespace.BuildSnapshot()
-assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil, "expected disabled categories to be omitted")
-assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false, "expected omitted categories to be explicit")
+assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
+assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
 
 print("HammerLink export tests passed")
