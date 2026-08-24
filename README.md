@@ -5,12 +5,18 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](LICENSE.txt)
 [![Client](https://img.shields.io/badge/client-retail-4c9a7a?style=flat-square)](https://worldofwarcraft.blizzard.com/)
 
-HammerLink is the local companion addon for Consecrated Hammer. Left-click its
-Consecrated Hammer minimap icon, or type `/hammerlink export` (also `/hl
-export`), then paste the compact code into the site. Right-click the minimap
-icon or use `/hammerlink about` for version details, links and a highly useful
-link note. Use `/hammerlink options` to choose export categories; all are
-enabled by default, and each export records any category that was excluded.
+HammerLink is the local companion addon for Consecrated Hammer and a readable
+bridge from WoW to AI assistants. Left-click its Consecrated Hammer minimap
+icon, or type `/hammerlink export` (also `/hl export`), to open a single export
+chooser. Select either a compact code for the Consecrated Hammer site or a
+Markdown report you can paste directly into ChatGPT, Claude or another AI.
+
+The chooser shows a live record count for every category and the total selected
+output. AI-readable sections expected to add substantial text get a warning
+icon with their estimated character count; the warning never blocks export.
+Category choices persist and all start enabled. The compact export records what
+was selected; the AI-readable report explicitly distinguishes omitted,
+unavailable, unknown, empty and truncated data.
 
 It reads the client’s live state, which the public Blizzard Profile API does not expose promptly or at all:
 
@@ -27,9 +33,15 @@ It reads the client’s live state, which the public Blizzard Profile API does n
 - the complete set of owned Housing Catalog decor entries, including storage,
   placed and redeemable counts (account housing data, when the client catalog
   has finished loading);
+- learned profession recipes positively observed after opening the matching
+  profession window; unopened professions remain unknown rather than empty;
 - character identity, class, spec and item level at capture time.
 
-The addon makes no network requests. `HL1:` exports are a versioned JSON snapshot compressed with embedded LibDeflate and encoded for safe copy/paste. They are deliberately not encrypted: players should treat them as shareable character data.
+The addon makes no network requests. `HL1:` exports are a versioned JSON
+snapshot compressed with embedded LibDeflate and encoded for safe copy/paste.
+AI-readable exports use structured Markdown with names and IDs where available.
+Neither format is encrypted: players should review and treat both as shareable
+character data.
 
 ## Artwork
 

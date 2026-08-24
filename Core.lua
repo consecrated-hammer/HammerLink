@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.6.0"
+ns.VERSION = "0.7.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
@@ -326,9 +326,9 @@ SlashCmdList.HAMMERLINK = function(message)
     elseif command == "options" or command == "settings" then
         ns.ShowOptions()
     elseif command == "help" then
-        ns.Print("|cfff2d493/hammerlink export|r — copy your character, gear, bag items, talents and Vault state")
+        ns.Print("|cfff2d493/hammerlink export|r — choose a Consecrated Hammer code or AI-readable character report")
         ns.Print("|cfff2d493/hammerlink about|r — show version, links and important link notes")
-        ns.Print("|cfff2d493/hammerlink options|r — choose which categories an export includes")
+        ns.Print("|cfff2d493/hammerlink options|r — open the same export chooser")
     else
         ns.Print("Unknown command. Use /hammerlink export, /hammerlink about or /hammerlink options.")
     end

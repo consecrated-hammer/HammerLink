@@ -166,6 +166,42 @@ assert(quest.objectives[1].numFulfilled == 2 and quest.objectives[1].numRequired
 assert(quest.waypoint.mapID == 2395 and quest.waypoint.x == 0.42, "expected available quest waypoint")
 assert(snapshot.questLog.entries[2].isHidden and snapshot.questLog.entries[2].timer.elapsedSeconds == 1200, "expected hidden quest and timer metadata")
 
+local completeSnapshot = namespace.BuildCompleteSnapshot()
+local equipmentInfo = namespace.GetExportCategoryInfo(completeSnapshot, "equipment")
+local bagInfo = namespace.GetExportCategoryInfo(completeSnapshot, "bagItems")
+local recipeInfo = namespace.GetExportCategoryInfo(completeSnapshot, "professionRecipes")
+assert(equipmentInfo.count == 1 and bagInfo.count == 3 and recipeInfo.count == 1, "expected chooser category counts from the captured snapshot")
+assert(equipmentInfo.characters > 0 and recipeInfo.characters > 0, "expected rendered section sizes for chooser warnings")
+
+local aiReport = namespace.BuildAIReport(completeSnapshot)
+assert(aiReport:find("# HammerLink character report — Bluehoof-Dath'Remar", 1, true), "expected character name and realm in the report heading")
+assert(aiReport:find("Character: Bluehoof-Dath'Remar", 1, true), "expected character identity in report metadata")
+assert(aiReport:find("Equipped Helm", 1, true) and aiReport:find("item ID 1001", 1, true), "expected readable equipped item identity")
+assert(aiReport:find("Bag Helm", 1, true) and aiReport:find("ITEM_MOD_STRENGTH_SHORT 123", 1, true), "expected readable bag item details")
+assert(aiReport:find("Warm Chair", 1, true) and aiReport:find("record ID 77", 1, true), "expected readable decor record")
+assert(aiReport:find("A Dark Errand", 1, true) and aiReport:find("quest ID 9001", 1, true), "expected readable quest identity")
+assert(aiReport:find("Ironforge Chandelier", 1, true) and aiReport:find("recipe ID 1261659", 1, true), "expected readable learned recipe identity")
+assert(aiReport:find("Omitted, unavailable and unknown data are not evidence", 1, true), "expected conservative data-state guidance")
+
+local vaultOnly = {
+    equipment = false, bagItems = false, talents = false, vault = true,
+    currencyCaps = false, decorInventory = false, questLog = false,
+    professionRecipes = false,
+}
+C_WeeklyRewards = {
+    AreRewardsForCurrentRewardPeriod = function() return false end,
+    HasAvailableRewards = function() return false end,
+    HasGeneratedRewards = function() return false end,
+    GetActivities = function() return {} end,
+}
+local zeroVault = namespace.BuildSnapshot(vaultOnly)
+assert(zeroVault.vault.currentPeriod == false and zeroVault.vault.hasAvailableRewards == false and zeroVault.vault.hasGeneratedRewards == false, "expected known false Vault state to survive capture")
+assert(not namespace.GetExportCategoryInfo(zeroVault, "vault").unavailable, "expected zero-progress Vault data to remain available")
+local zeroVaultReport = namespace.BuildAIReport(zeroVault)
+assert(zeroVaultReport:find("Current reward period: no", 1, true), "expected known false Vault state in readable report")
+assert(zeroVaultReport:find("Great Vault: included — 0 records", 1, true), "expected zero-progress Vault scope instead of unavailable")
+C_WeeklyRewards = nil
+
 exportOptions.bagItems = false
 exportOptions.vault = false
 exportOptions.questLog = false
@@ -174,5 +210,23 @@ local reducedSnapshot = namespace.BuildSnapshot()
 assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
 assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
 assert(namespace.FormatExportSummary(reducedSnapshot):find("bag items omitted", 1, true), "expected omitted category in chat summary")
+
+local selectedSnapshot = namespace.SelectSnapshot(completeSnapshot, exportOptions)
+assert(selectedSnapshot.bagEquipment == nil and selectedSnapshot.vault == nil, "expected chooser selection to remove omitted payload sections")
+local reducedReport = namespace.BuildAIReport(selectedSnapshot)
+assert(reducedReport:find("Bag items: omitted by export settings", 1, true), "expected omitted categories to remain explicit in readable report")
+assert(not reducedReport:find("Bag Helm", 1, true), "expected omitted records to stay out of readable report")
+
+local unknownRecipes = namespace.SelectSnapshot(completeSnapshot, exportOptions)
+unknownRecipes.exportOptions.professionRecipes = true
+unknownRecipes.professionRecipes = {
+    available = false, professions = {},
+    reason = "Open each profession window once; uncached professions are unknown.",
+}
+local unknownInfo = namespace.GetExportCategoryInfo(unknownRecipes, "professionRecipes")
+local unknownReport = namespace.BuildAIReport(unknownRecipes)
+assert(unknownInfo.unavailable and unknownInfo.count == 0, "expected unavailable recipe data instead of a false zero")
+assert(unknownReport:find("Learned profession recipes: unavailable or unknown", 1, true), "expected unknown recipe state in report scope")
+assert(unknownReport:find("uncached professions are unknown", 1, true), "expected unavailable reason in readable report")
 
 print("HammerLink export tests passed")

@@ -14,3 +14,4 @@ jobs:
       - run: |
           lua tests/export_test.lua
           lua tests/core_test.lua
+          lua tests/ui_test.lua

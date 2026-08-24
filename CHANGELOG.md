@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0] - 2026-08-24
+
+- Replace the immediate export and separate options panel with one guided export
+  chooser. It shows live per-category and selected-record counts while retaining
+  the existing persistent, all-enabled-by-default category choices.
+- Add an AI-readable Markdown report for direct use with ChatGPT, Claude and
+  other assistants. Reports include character identity, names and IDs where
+  available, and explicit omitted, unavailable, unknown, empty and truncated
+  states.
+- Estimate the rendered size of AI-readable sections and show a non-blocking
+  warning with a tooltip when a selected category will add substantial text.
+  The existing compressed `HL1:` Consecrated Hammer export remains the default.
+
 ## [0.6.0] - 2026-08-23
 
 - Cache learned profession recipes whenever the matching Retail profession panel

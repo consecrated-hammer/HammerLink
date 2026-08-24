@@ -227,13 +227,21 @@ local function reward(rewardInfo)
     return value
 end
 
+local function weeklyRewardValue(method)
+    local getter = C_WeeklyRewards and C_WeeklyRewards[method]
+    if not getter then return nil end
+    local ok, value = pcall(getter)
+    if not ok then return nil end
+    return value
+end
+
 local function vault()
     local snapshot = {
         capturedAt = time(),
         nextResetSeconds = GetQuestResetTime and GetQuestResetTime() or nil,
-        currentPeriod = C_WeeklyRewards and C_WeeklyRewards.AreRewardsForCurrentRewardPeriod and C_WeeklyRewards.AreRewardsForCurrentRewardPeriod() or nil,
-        hasAvailableRewards = C_WeeklyRewards and C_WeeklyRewards.HasAvailableRewards and C_WeeklyRewards.HasAvailableRewards() or nil,
-        hasGeneratedRewards = C_WeeklyRewards and C_WeeklyRewards.HasGeneratedRewards and C_WeeklyRewards.HasGeneratedRewards() or nil,
+        currentPeriod = weeklyRewardValue("AreRewardsForCurrentRewardPeriod"),
+        hasAvailableRewards = weeklyRewardValue("HasAvailableRewards"),
+        hasGeneratedRewards = weeklyRewardValue("HasGeneratedRewards"),
         activities = {},
     }
     if not C_WeeklyRewards or not C_WeeklyRewards.GetActivities then return snapshot end
@@ -373,28 +381,72 @@ local function questLog()
     return snapshot
 end
 
-function ns.BuildSnapshot()
-    local options = ns.GetExportOptions()
+local CATEGORY_ORDER = {
+    "equipment", "bagItems", "talents", "vault", "currencyCaps",
+    "decorInventory", "questLog", "professionRecipes",
+}
+
+local CATEGORY_FIELDS = {
+    equipment = "equipment", bagItems = "bagEquipment", talents = "talents",
+    vault = "vault", currencyCaps = "currencyCaps",
+    decorInventory = "decorInventory", questLog = "questLog",
+    professionRecipes = "professionRecipes",
+}
+
+local CATEGORY_TITLES = {
+    equipment = "Equipped gear", bagItems = "Bag items", talents = "Active talents",
+    vault = "Great Vault", currencyCaps = "Currency caps",
+    decorInventory = "Housing decor inventory", questLog = "Current quest log",
+    professionRecipes = "Learned profession recipes",
+}
+
+local function selectedOptions(options)
+    local selected = {}
+    options = options or ns.GetExportOptions()
+    for _, category in ipairs(CATEGORY_ORDER) do selected[category] = options[category] ~= false end
+    return selected
+end
+
+function ns.BuildSnapshot(options)
+    local selected = selectedOptions(options)
     local snapshot = {
         format = 3,
         capturedAt = time(),
         character = character(),
-        exportOptions = {
-            equipment = ns.IsExportEnabled("equipment"), bagItems = ns.IsExportEnabled("bagItems"),
-            talents = ns.IsExportEnabled("talents"), vault = ns.IsExportEnabled("vault"),
-            currencyCaps = ns.IsExportEnabled("currencyCaps"), decorInventory = ns.IsExportEnabled("decorInventory"),
-            questLog = ns.IsExportEnabled("questLog"), professionRecipes = ns.IsExportEnabled("professionRecipes"),
-        },
+        exportOptions = selected,
     }
-    if options.equipment ~= false then snapshot.equipment = equipment() end
-    if options.bagItems ~= false then snapshot.bagEquipment = bagEquipment() end
-    if options.talents ~= false then snapshot.talents = { importString = talentExport() } end
-    if options.vault ~= false then snapshot.vault = vault() end
-    if options.currencyCaps ~= false then snapshot.currencyCaps = currencyCaps() end
-    if options.decorInventory ~= false then snapshot.decorInventory = ns.GetDecorInventory() end
-    if options.questLog ~= false then snapshot.questLog = questLog() end
-    if options.professionRecipes ~= false then snapshot.professionRecipes = ns.GetProfessionRecipes() end
+    if selected.equipment then snapshot.equipment = equipment() end
+    if selected.bagItems then snapshot.bagEquipment = bagEquipment() end
+    if selected.talents then snapshot.talents = { importString = talentExport() } end
+    if selected.vault then snapshot.vault = vault() end
+    if selected.currencyCaps then snapshot.currencyCaps = currencyCaps() end
+    if selected.decorInventory then snapshot.decorInventory = ns.GetDecorInventory() end
+    if selected.questLog then snapshot.questLog = questLog() end
+    if selected.professionRecipes then snapshot.professionRecipes = ns.GetProfessionRecipes() end
     return snapshot
+end
+
+function ns.BuildCompleteSnapshot()
+    local all = {}
+    for _, category in ipairs(CATEGORY_ORDER) do all[category] = true end
+    return ns.BuildSnapshot(all)
+end
+
+function ns.SelectSnapshot(snapshot, options)
+    local selected = selectedOptions(options)
+    local result = {
+        format = snapshot.format,
+        capturedAt = snapshot.capturedAt,
+        character = snapshot.character,
+        exportOptions = selected,
+    }
+    for _, category in ipairs(CATEGORY_ORDER) do
+        if selected[category] then
+            local field = CATEGORY_FIELDS[category]
+            result[field] = snapshot[field]
+        end
+    end
+    return result
 end
 
 local function countRecipes(professionRecipes)
@@ -431,8 +483,310 @@ function ns.FormatExportSummary(snapshot)
     return "exported — " .. table.concat(parts, "; ")
 end
 
-function ns.BuildExport()
-    local snapshot = ns.BuildSnapshot()
+local function plain(value)
+    if value == nil then return nil end
+    local text = tostring(value)
+    text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    text = text:gsub("[\r\n]+", " ")
+    return text
+end
+
+local function linkName(link)
+    return type(link) == "string" and link:match("%[([^%]]+)%]") or nil
+end
+
+local function itemString(link)
+    return type(link) == "string" and link:match("H(item:[^|]+)|h") or nil
+end
+
+local function append(lines, value)
+    lines[#lines + 1] = value
+end
+
+local function addValue(parts, label, value)
+    if value ~= nil and value ~= "" then parts[#parts + 1] = label .. " " .. plain(value) end
+end
+
+local function itemLine(item, location)
+    local parts = {}
+    local name = item.name or linkName(item.link) or "Unknown item"
+    addValue(parts, "item ID", item.itemID)
+    addValue(parts, "item level", item.itemLevel or item.baseItemLevel)
+    addValue(parts, "quantity", item.stackCount and item.stackCount > 1 and item.stackCount or nil)
+    addValue(parts, "quality", item.quality)
+    addValue(parts, "type", item.itemSubType or item.itemType)
+    if item.isBound ~= nil then addValue(parts, "bound", item.isBound and "yes" or "no") end
+    addValue(parts, "item string", itemString(item.link))
+    return "- " .. plain(location) .. ": " .. plain(name)
+        .. (#parts > 0 and " (" .. table.concat(parts, "; ") .. ")" or "")
+end
+
+local function categoryCount(snapshot, category)
+    if category == "equipment" then return #(snapshot.equipment or {}) end
+    if category == "bagItems" then return #(snapshot.bagEquipment or {}) end
+    if category == "talents" then return snapshot.talents and snapshot.talents.importString and 1 or 0 end
+    if category == "vault" then return snapshot.vault and #(snapshot.vault.activities or {}) or 0 end
+    if category == "currencyCaps" then return #(snapshot.currencyCaps or {}) end
+    if category == "decorInventory" then
+        local decor = snapshot.decorInventory
+        return decor and #(decor.packedItems or decor.items or {}) or 0
+    end
+    if category == "questLog" then return snapshot.questLog and #(snapshot.questLog.entries or {}) or 0 end
+    if category == "professionRecipes" then return countRecipes(snapshot.professionRecipes) end
+    return 0
+end
+
+local function categoryUnavailable(snapshot, category)
+    local field = CATEGORY_FIELDS[category]
+    local value = snapshot[field]
+    if category == "talents" then return not (value and value.importString) end
+    if category == "vault" then
+        return not (value and (value.currentPeriod ~= nil or value.hasAvailableRewards ~= nil
+            or value.hasGeneratedRewards ~= nil or value.dungeonRuns or #(value.activities or {}) > 0))
+    end
+    if category == "decorInventory" or category == "questLog" or category == "professionRecipes" then
+        return value and value.available == false
+    end
+    return false
+end
+
+local function unavailableReason(snapshot, category)
+    local value = snapshot[CATEGORY_FIELDS[category]]
+    if value and value.reason then return plain(value.reason) end
+    if category == "talents" then return "The active talent import string was not available from the client." end
+    if category == "vault" then return "Great Vault data was not available from the client." end
+    return "This category was unavailable when the report was captured."
+end
+
+local function boolText(value)
+    if value == nil then return nil end
+    return value and "yes" or "no"
+end
+
+local function capturedTime(value)
+    if type(value) == "number" and type(date) == "function" then
+        local ok, formatted = pcall(date, "%Y-%m-%d %H:%M:%S", value)
+        if ok and type(formatted) == "string" and formatted ~= "" then
+            return formatted .. " (local time; Unix " .. tostring(value) .. ")"
+        end
+    end
+    return tostring(value or "unknown") .. " (Unix time)"
+end
+
+local function specialisationText(specID)
+    if type(specID) == "number" and type(GetSpecializationInfoByID) == "function" then
+        local ok, _, name = pcall(GetSpecializationInfoByID, specID)
+        if ok and type(name) == "string" and name ~= "" then
+            return plain(name) .. " (ID " .. tostring(specID) .. ")"
+        end
+    end
+    return specID and ("ID " .. tostring(specID)) or "unknown"
+end
+
+local function reportSection(snapshot, category)
+    local lines = { "## " .. CATEGORY_TITLES[category], "" }
+    if categoryUnavailable(snapshot, category) then
+        append(lines, "**Unavailable:** " .. unavailableReason(snapshot, category))
+        return table.concat(lines, "\n")
+    end
+
+    if category == "equipment" then
+        for _, item in ipairs(snapshot.equipment or {}) do
+            append(lines, itemLine(item, item.slot or "Unknown slot"))
+        end
+    elseif category == "bagItems" then
+        for _, item in ipairs(snapshot.bagEquipment or {}) do
+            append(lines, itemLine(item, "Bag " .. tostring(item.bag or "?") .. ", slot " .. tostring(item.slot or "?")))
+            if item.stats then
+                local stats = {}
+                for stat, amount in pairs(item.stats) do stats[#stats + 1] = plain(stat) .. " " .. tostring(amount) end
+                table.sort(stats)
+                if #stats > 0 then append(lines, "  - Stats: " .. table.concat(stats, "; ")) end
+            end
+            for _, gem in ipairs(item.gems or {}) do
+                append(lines, "  - Gem " .. tostring(gem.socket or "?") .. ": "
+                    .. plain(gem.name or linkName(gem.link) or "Unknown gem")
+                    .. (gem.itemID and " (item ID " .. tostring(gem.itemID) .. ")" or ""))
+            end
+        end
+    elseif category == "talents" then
+        append(lines, "```text")
+        append(lines, plain(snapshot.talents.importString))
+        append(lines, "```")
+    elseif category == "vault" then
+        local value = snapshot.vault or {}
+        append(lines, "- Current reward period: " .. tostring(boolText(value.currentPeriod) or "unknown"))
+        append(lines, "- Rewards available: " .. tostring(boolText(value.hasAvailableRewards) or "unknown"))
+        append(lines, "- Generated rewards: " .. tostring(boolText(value.hasGeneratedRewards) or "unknown"))
+        if value.nextResetSeconds then append(lines, "- Seconds until reset: " .. tostring(value.nextResetSeconds)) end
+        if value.dungeonRuns then
+            append(lines, "- Dungeon runs: Heroic " .. tostring(value.dungeonRuns.heroic or 0)
+                .. ", Mythic " .. tostring(value.dungeonRuns.mythic or 0)
+                .. ", Mythic+ " .. tostring(value.dungeonRuns.mythicPlus or 0))
+        end
+        for _, activity in ipairs(value.activities or {}) do
+            local parts = {}
+            addValue(parts, "type", activity.type)
+            addValue(parts, "index", activity.index)
+            addValue(parts, "activity ID", activity.id)
+            if activity.progress ~= nil or activity.threshold ~= nil then
+                parts[#parts + 1] = "progress " .. tostring(activity.progress or "?") .. "/" .. tostring(activity.threshold or "?")
+            end
+            addValue(parts, "level", activity.level)
+            addValue(parts, "tier ID", activity.activityTierID)
+            addValue(parts, "raid", activity.raidString)
+            append(lines, "- " .. table.concat(parts, "; "))
+            for _, rewardInfo in ipairs(activity.rewards or {}) do
+                local rewardParts = {}
+                addValue(rewardParts, "type", rewardInfo.type)
+                addValue(rewardParts, "ID", rewardInfo.id)
+                addValue(rewardParts, "quantity", rewardInfo.quantity)
+                addValue(rewardParts, "item", linkName(rewardInfo.link))
+                addValue(rewardParts, "item string", itemString(rewardInfo.link))
+                append(lines, "  - Reward: " .. table.concat(rewardParts, "; "))
+            end
+        end
+    elseif category == "currencyCaps" then
+        for _, currency in ipairs(snapshot.currencyCaps or {}) do
+            local parts = {}
+            addValue(parts, "currency ID", currency.currencyID)
+            addValue(parts, "quantity", currency.quantity)
+            addValue(parts, "weekly earned", currency.quantityEarnedThisWeek)
+            addValue(parts, "weekly cap", currency.maxWeeklyQuantity)
+            addValue(parts, "total earned", currency.totalEarned)
+            addValue(parts, "maximum", currency.maxQuantity)
+            addValue(parts, "account-wide", boolText(currency.isAccountWide))
+            addValue(parts, "transferable", boolText(currency.isAccountTransferable))
+            append(lines, "- " .. plain(currency.name or "Unknown currency") .. " (" .. table.concat(parts, "; ") .. ")")
+        end
+    elseif category == "decorInventory" then
+        local decor = snapshot.decorInventory or {}
+        if decor.totalOwnedCount ~= nil then append(lines, "- Total owned copies: " .. tostring(decor.totalOwnedCount)) end
+        if decor.maxOwnedCount ~= nil then append(lines, "- Collection capacity: " .. tostring(decor.maxOwnedCount)) end
+        if decor.truncated then append(lines, "- **Truncated:** yes") end
+        for _, row in ipairs(decor.packedItems or {}) do
+            local flags = tonumber(row[9]) or 0
+            local properties = {}
+            if flags % 2 >= 1 then properties[#properties + 1] = "unique trophy" end
+            if flags % 4 >= 2 then properties[#properties + 1] = "indoors" end
+            if flags % 8 >= 4 then properties[#properties + 1] = "outdoors" end
+            append(lines, "- " .. plain(row[2] or "Unknown decor")
+                .. " (record ID " .. tostring(row[1] or "unknown")
+                .. (tonumber(row[3]) and row[3] > 0 and "; item ID " .. tostring(row[3]) or "")
+                .. "): stored " .. tostring(row[5] or 0)
+                .. ", placed " .. tostring(row[6] or 0)
+                .. ", redeemable " .. tostring(row[7] or 0)
+                .. ", destroyable " .. tostring(row[8] or 0)
+                .. (#properties > 0 and "; " .. table.concat(properties, ", ") or ""))
+        end
+        for _, item in ipairs(decor.items or {}) do
+            append(lines, "- " .. plain(item.name or "Unknown decor")
+                .. " (record ID " .. tostring(item.recordID or "unknown")
+                .. (item.itemID and "; item ID " .. tostring(item.itemID) or "") .. ")")
+        end
+    elseif category == "questLog" then
+        local quests = snapshot.questLog or {}
+        if quests.truncated then append(lines, "- **Truncated:** yes") end
+        for _, quest in ipairs(quests.entries or {}) do
+            local parts = { "quest ID " .. tostring(quest.questID or "unknown") }
+            addValue(parts, "level", quest.level)
+            addValue(parts, "tag", quest.tag and quest.tag.name)
+            addValue(parts, "complete", boolText(quest.isComplete))
+            addValue(parts, "failed", boolText(quest.isFailed))
+            addValue(parts, "suggested group", quest.suggestedGroup and quest.suggestedGroup > 0 and quest.suggestedGroup or nil)
+            append(lines, "- " .. plain(quest.title or "Unknown quest") .. " (" .. table.concat(parts, "; ") .. ")")
+            for _, objective in ipairs(quest.objectives or {}) do
+                append(lines, "  - " .. plain(objective.text or "Objective progress")
+                    .. (objective.finished ~= nil and "; complete " .. boolText(objective.finished) or ""))
+            end
+            if quest.waypoint then
+                append(lines, "  - Waypoint: map " .. tostring(quest.waypoint.mapID)
+                    .. ", " .. tostring(quest.waypoint.x) .. ", " .. tostring(quest.waypoint.y))
+            end
+            if quest.timer then
+                append(lines, "  - Timer: " .. tostring(quest.timer.elapsedSeconds or 0)
+                    .. "/" .. tostring(quest.timer.totalSeconds or 0) .. " seconds")
+            end
+        end
+    elseif category == "professionRecipes" then
+        local professions = snapshot.professionRecipes or {}
+        if professions.truncated then append(lines, "**Truncated:** yes") append(lines, "") end
+        for _, profession in ipairs(professions.professions or {}) do
+            local skill = profession.skillLevel and (" — skill " .. tostring(profession.skillLevel)
+                .. (profession.maxSkillLevel and "/" .. tostring(profession.maxSkillLevel) or "")) or ""
+            append(lines, "### " .. plain(profession.name or "Unknown profession") .. skill)
+            append(lines, "")
+            append(lines, "Skill line ID: " .. tostring(profession.skillLineID or "unknown"))
+            append(lines, "")
+            for _, recipe in ipairs(profession.recipes or {}) do
+                append(lines, "- " .. plain(recipe.name or "Unknown recipe")
+                    .. " (recipe ID " .. tostring(recipe.recipeID or "unknown") .. ")")
+            end
+            append(lines, "")
+        end
+    end
+
+    if categoryCount(snapshot, category) == 0 and #lines == 2 then append(lines, "_No records captured._") end
+    return table.concat(lines, "\n")
+end
+
+function ns.GetExportCategoryInfo(snapshot, category, includeCharacters)
+    local options = snapshot.exportOptions or {}
+    local enabled = options[category] ~= false
+    local unavailable = enabled and categoryUnavailable(snapshot, category)
+    local count = categoryCount(snapshot, category)
+    local section = enabled and includeCharacters ~= false and reportSection(snapshot, category) or ""
+    return {
+        enabled = enabled,
+        count = count,
+        unavailable = unavailable,
+        truncated = enabled and snapshot[CATEGORY_FIELDS[category]]
+            and snapshot[CATEGORY_FIELDS[category]].truncated == true or false,
+        characters = #section,
+        title = CATEGORY_TITLES[category],
+    }
+end
+
+function ns.BuildAIReport(snapshot)
+    snapshot = snapshot or ns.BuildSnapshot()
+    local characterData = snapshot.character or {}
+    local characterLabel = plain(characterData.name or "Unknown") .. "-" .. plain(characterData.realm or "Unknown realm")
+    local lines = { "# HammerLink character report — " .. characterLabel, "" }
+    append(lines, "> Captured from World of Warcraft by HammerLink. Omitted, unavailable and unknown data are not evidence that a character has none.")
+    append(lines, "")
+    append(lines, "- Captured at: " .. capturedTime(snapshot.capturedAt))
+    append(lines, "- Character: " .. characterLabel)
+    append(lines, "- Class: " .. plain(characterData.class or "Unknown"))
+    append(lines, "- Level: " .. tostring(characterData.level or "unknown"))
+    append(lines, "- Specialisation: " .. specialisationText(characterData.specID))
+    append(lines, "- Equipped item level: " .. tostring(characterData.equippedItemLevel or "unknown"))
+    append(lines, "- Overall item level: " .. tostring(characterData.overallItemLevel or "unknown"))
+    append(lines, "")
+    append(lines, "## Export scope")
+    append(lines, "")
+    for _, category in ipairs(CATEGORY_ORDER) do
+        local info = ns.GetExportCategoryInfo(snapshot, category, false)
+        local state
+        if not info.enabled then state = "omitted by export settings"
+        elseif info.unavailable then state = "unavailable or unknown"
+        else state = "included — " .. tostring(info.count) .. " records" end
+        if info.truncated then state = state .. "; truncated" end
+        append(lines, "- " .. info.title .. ": " .. state)
+    end
+    for _, category in ipairs(CATEGORY_ORDER) do
+        if snapshot.exportOptions[category] ~= false then
+            append(lines, "")
+            append(lines, reportSection(snapshot, category))
+        end
+    end
+    append(lines, "")
+    append(lines, "---")
+    append(lines, "Generated by HammerLink " .. tostring(ns.VERSION or "unknown") .. ". The addon did not upload this report.")
+    return table.concat(lines, "\n")
+end
+
+function ns.BuildExport(snapshot)
+    snapshot = snapshot or ns.BuildSnapshot()
     local json = encode(snapshot)
     local compressed = LibDeflate:CompressDeflate(json, { level = 9 })
     assert(compressed, "could not compress export")
