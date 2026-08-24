@@ -1,5 +1,5 @@
 local namespace = {
-    VERSION = "0.7.0-test",
+    VERSION = "0.7.1-test",
     db = { options = {
         equipment = true, bagItems = true, talents = true, vault = true,
         currencyCaps = true, decorInventory = true, questLog = true,
@@ -36,6 +36,7 @@ local function widget(kind, name, template)
     function value:SetMultiLine() end
     function value:SetAutoFocus() end
     function value:SetFontObject() end
+    function value:SetAlpha(alpha) self.alpha = alpha end
     function value:SetTextInsets() end
     function value:SetJustifyH() end
     function value:SetScrollChild(child) self.scrollChild = child end
@@ -118,13 +119,16 @@ namespace.ShowExport()
 local chooser = HammerLinkOptionsFrame
 assert(chooser and chooser.shown, "expected the export chooser to open")
 assert(chooser.format == "compact" and chooser.compact.highlighted, "expected compact export to be the default")
+assert(chooser.compact.alpha == 1 and chooser.ai.alpha == 0.5, "expected the unselected AI format to be visibly muted")
 assert(chooser.rows.bagItems.count.text:find("L118 records", 1, true), "expected locale-aware per-category counts")
+assert(chooser.rows.talents.count.text:find("L1 record", 1, true), "expected singular per-category count wording")
 assert(numberFormatCalls > 0, "expected Blizzard's number formatter")
 assert(chooser.summary.text:find("records across 8 categories", 1, true), "expected live selected-record total")
 assert(not chooser.rows.professionRecipes.warning.shown, "expected AI size warning to stay hidden for compact exports")
 
 chooser.ai.scripts.OnClick()
 assert(chooser.format == "ai" and chooser.ai.highlighted, "expected AI-readable format selection")
+assert(chooser.ai.alpha == 1 and chooser.compact.alpha == 0.5, "expected the unselected compact format to be visibly muted")
 assert(chooser.rows.professionRecipes.warning.shown, "expected large rendered AI section warning")
 assert(chooser.summary.text:find("about", 1, true), "expected AI report character estimate")
 

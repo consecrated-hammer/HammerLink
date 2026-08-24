@@ -487,8 +487,46 @@ local function plain(value)
     if value == nil then return nil end
     local text = tostring(value)
     text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    text = text:gsub("|A:.-|a", ""):gsub("|T.-|t", "")
     text = text:gsub("[\r\n]+", " ")
+    text = text:gsub("%s%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
     return text
+end
+
+local function recordCountText(count)
+    return tostring(count) .. (count == 1 and " record" or " records")
+end
+
+local CLASS_NAMES = {
+    DEATHKNIGHT = "Death Knight", DEMONHUNTER = "Demon Hunter", DRUID = "Druid",
+    EVOKER = "Evoker", HUNTER = "Hunter", MAGE = "Mage", MONK = "Monk",
+    PALADIN = "Paladin", PRIEST = "Priest", ROGUE = "Rogue", SHAMAN = "Shaman",
+    WARLOCK = "Warlock", WARRIOR = "Warrior",
+}
+
+local function classText(classToken)
+    if type(classToken) ~= "string" or classToken == "" then return "Unknown" end
+    local localized = type(LOCALIZED_CLASS_NAMES_MALE) == "table" and LOCALIZED_CLASS_NAMES_MALE[classToken]
+    if type(localized) ~= "string" or localized == "" then
+        localized = type(LOCALIZED_CLASS_NAMES_FEMALE) == "table" and LOCALIZED_CLASS_NAMES_FEMALE[classToken]
+    end
+    return plain(localized or CLASS_NAMES[classToken] or classToken)
+end
+
+local function decimalText(value)
+    if type(value) ~= "number" then return tostring(value or "unknown") end
+    local text = string.format("%.2f", value)
+    return text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+end
+
+local function countedBlizzardText(value, count)
+    local text = tostring(value or "")
+    local numericCount = tonumber(count)
+    text = text:gsub("%%d", numericCount and tostring(numericCount) or "the required number of")
+    local grammarChoice = numericCount == 1 and "%1" or "%2"
+    text = text:gsub("|4([^:;]*):([^;]*);", grammarChoice)
+    text = text:gsub("|4([^:;]*):([^;]*)$", grammarChoice)
+    return plain(text)
 end
 
 local function linkName(link)
@@ -634,7 +672,7 @@ local function reportSection(snapshot, category)
             end
             addValue(parts, "level", activity.level)
             addValue(parts, "tier ID", activity.activityTierID)
-            addValue(parts, "raid", activity.raidString)
+            addValue(parts, "raid", countedBlizzardText(activity.raidString, activity.threshold))
             append(lines, "- " .. table.concat(parts, "; "))
             for _, rewardInfo in ipairs(activity.rewards or {}) do
                 local rewardParts = {}
@@ -756,11 +794,11 @@ function ns.BuildAIReport(snapshot)
     append(lines, "")
     append(lines, "- Captured at: " .. capturedTime(snapshot.capturedAt))
     append(lines, "- Character: " .. characterLabel)
-    append(lines, "- Class: " .. plain(characterData.class or "Unknown"))
+    append(lines, "- Class: " .. classText(characterData.class))
     append(lines, "- Level: " .. tostring(characterData.level or "unknown"))
     append(lines, "- Specialisation: " .. specialisationText(characterData.specID))
-    append(lines, "- Equipped item level: " .. tostring(characterData.equippedItemLevel or "unknown"))
-    append(lines, "- Overall item level: " .. tostring(characterData.overallItemLevel or "unknown"))
+    append(lines, "- Equipped item level: " .. decimalText(characterData.equippedItemLevel))
+    append(lines, "- Overall item level: " .. decimalText(characterData.overallItemLevel))
     append(lines, "")
     append(lines, "## Export scope")
     append(lines, "")
@@ -769,7 +807,7 @@ function ns.BuildAIReport(snapshot)
         local state
         if not info.enabled then state = "omitted by export settings"
         elseif info.unavailable then state = "unavailable or unknown"
-        else state = "included — " .. tostring(info.count) .. " records" end
+        else state = "included — " .. recordCountText(info.count) end
         if info.truncated then state = state .. "; truncated" end
         append(lines, "- " .. info.title .. ": " .. state)
     end

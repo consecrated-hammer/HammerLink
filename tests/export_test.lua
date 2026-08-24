@@ -36,6 +36,7 @@ INVSLOT_MAINHAND = 16
 INVSLOT_OFFHAND = 17
 NUM_BAG_SLOTS = 4
 Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 } }
+LOCALIZED_CLASS_NAMES_MALE = { SHAMAN = "Shaman" }
 
 function UnitFullName() return "Bluehoof", "Dath'Remar" end
 function UnitClass() return "Paladin", "PALADIN" end
@@ -167,6 +168,30 @@ assert(quest.waypoint.mapID == 2395 and quest.waypoint.x == 0.42, "expected avai
 assert(snapshot.questLog.entries[2].isHidden and snapshot.questLog.entries[2].timer.elapsedSeconds == 1200, "expected hidden quest and timer metadata")
 
 local completeSnapshot = namespace.BuildCompleteSnapshot()
+completeSnapshot.character.class = "SHAMAN"
+completeSnapshot.character.equippedItemLevel = 257.5
+completeSnapshot.character.overallItemLevel = 265.6875
+completeSnapshot.equipment[1].name = "Equipped Helm |A:Professions-ChatIcon-Quality-Tier5:17:15::1|a"
+completeSnapshot.talents = { importString = "TEST-TALENT-STRING" }
+completeSnapshot.vault = {
+    currentPeriod = false, hasAvailableRewards = true, hasGeneratedRewards = false,
+    activities = { {
+        type = 6, index = 1, id = 207, progress = 1, threshold = 2,
+        level = 0, activityTierID = 0,
+        raidString = "Defeat %d Midnight |4Season 1 Boss:Season 1 Bosses",
+        rewards = {},
+    }, {
+        type = 1, index = 1, id = 213, progress = 0, threshold = 1,
+        level = 0, activityTierID = 0,
+        raidString = "Defeat %d Midnight |4Boss:Bosses;",
+        rewards = {},
+    }, {
+        type = 99, index = 1, id = 999, progress = 0,
+        level = 0, activityTierID = 0,
+        raidString = "Defeat %d future |4Boss:Bosses;",
+        rewards = {},
+    } },
+}
 local equipmentInfo = namespace.GetExportCategoryInfo(completeSnapshot, "equipment")
 local bagInfo = namespace.GetExportCategoryInfo(completeSnapshot, "bagItems")
 local recipeInfo = namespace.GetExportCategoryInfo(completeSnapshot, "professionRecipes")
@@ -176,7 +201,16 @@ assert(equipmentInfo.characters > 0 and recipeInfo.characters > 0, "expected ren
 local aiReport = namespace.BuildAIReport(completeSnapshot)
 assert(aiReport:find("# HammerLink character report — Bluehoof-Dath'Remar", 1, true), "expected character name and realm in the report heading")
 assert(aiReport:find("Character: Bluehoof-Dath'Remar", 1, true), "expected character identity in report metadata")
+assert(aiReport:find("Class: Shaman", 1, true), "expected a human-readable class name")
+assert(aiReport:find("Equipped item level: 257.5", 1, true), "expected concise fractional equipped item level")
+assert(aiReport:find("Overall item level: 265.69", 1, true), "expected overall item level rounded to two decimals")
+assert(aiReport:find("Active talents: included — 1 record", 1, true), "expected singular report record wording")
 assert(aiReport:find("Equipped Helm", 1, true) and aiReport:find("item ID 1001", 1, true), "expected readable equipped item identity")
+assert(not aiReport:find("|A:", 1, true), "expected Blizzard atlas markup to be removed")
+assert(aiReport:find("raid Defeat 2 Midnight Season 1 Bosses", 1, true), "expected Vault count and plural grammar to be resolved")
+assert(aiReport:find("raid Defeat 1 Midnight Boss", 1, true), "expected singular Vault grammar to be resolved")
+assert(aiReport:find("raid Defeat the required number of future Bosses", 1, true), "expected readable fallback when a Vault threshold is unavailable")
+assert(not aiReport:find("%d", 1, true) and not aiReport:find("|4", 1, true), "expected no raw Blizzard grammar in the report")
 assert(aiReport:find("Bag Helm", 1, true) and aiReport:find("ITEM_MOD_STRENGTH_SHORT 123", 1, true), "expected readable bag item details")
 assert(aiReport:find("Warm Chair", 1, true) and aiReport:find("record ID 77", 1, true), "expected readable decor record")
 assert(aiReport:find("A Dark Errand", 1, true) and aiReport:find("quest ID 9001", 1, true), "expected readable quest identity")

@@ -121,6 +121,10 @@ local function commaNumber(value)
     end
 end
 
+local function recordCountText(value)
+    return commaNumber(value) .. (value == 1 and " record" or " records")
+end
+
 local function createWarning(parent)
     local warning = CreateFrame("Frame", nil, parent)
     warning:SetSize(18, 18)
@@ -156,13 +160,13 @@ local function refreshChooser(f)
         if info.unavailable then
             row.count:SetText("|cffaaaaaaUnavailable|r")
         else
-            row.count:SetText("|cffaaaaaa" .. commaNumber(info.count) .. " records|r")
+            row.count:SetText("|cffaaaaaa" .. recordCountText(info.count) .. "|r")
         end
         local large = f.format == "ai" and checked and info.characters >= LARGE_SECTION_CHARACTERS
         if large then
             row.warning.tooltipText = category.title .. " will add about "
                 .. commaNumber(info.characters) .. " characters across "
-                .. commaNumber(info.count) .. " records. It will still export normally."
+                .. recordCountText(info.count) .. ". It will still export normally."
             row.warning:Show()
         else
             row.warning:Hide()
@@ -175,12 +179,16 @@ local function refreshChooser(f)
     end
     if f.format == "compact" then
         f.compact:LockHighlight()
+        f.compact:SetAlpha(1)
         f.ai:UnlockHighlight()
+        f.ai:SetAlpha(0.5)
     else
         f.compact:UnlockHighlight()
+        f.compact:SetAlpha(0.5)
         f.ai:LockHighlight()
+        f.ai:SetAlpha(1)
     end
-    local footer = commaNumber(selectedCount) .. " records across " .. tostring(selectedCategories) .. " categories"
+    local footer = recordCountText(selectedCount) .. " across " .. tostring(selectedCategories) .. " categories"
     if f.format == "ai" then
         footer = footer .. " · about " .. commaNumber(selectedCharacters) .. " characters"
     else

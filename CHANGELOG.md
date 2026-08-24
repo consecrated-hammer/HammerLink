@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1] - 2026-08-24
+
+- Polish AI-readable reports with human-friendly class names, concise item-level
+  precision, correct singular record counts, and resolved Blizzard count/plural
+  markup instead of raw UI formatting codes.
+- Make the selected export format visually distinct by highlighting it and
+  muting the unselected alternative.
+
 ## [0.7.0] - 2026-08-24
 
 - Replace the immediate export and separate options panel with one guided export

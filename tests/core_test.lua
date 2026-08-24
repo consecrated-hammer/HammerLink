@@ -30,6 +30,7 @@ C_TradeSkillUI = {
 }
 
 assert(loadfile("Core.lua"))("HammerLink", namespace)
+assert(namespace.VERSION == "0.7.1", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
 assert(namespace.GetProfessionRecipes().available == false and namespace.db.professionRecipesByCharacter == nil, "expected an uncached export read to avoid SavedVariables writes")
