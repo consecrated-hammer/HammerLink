@@ -5,11 +5,11 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](LICENSE.txt)
 [![Client](https://img.shields.io/badge/client-retail-4c9a7a?style=flat-square)](https://worldofwarcraft.blizzard.com/)
 
-HammerLink is the local companion addon for Consecrated Hammer and a readable
-bridge from WoW to AI assistants. Left-click its Consecrated Hammer minimap
-icon, or type `/hammerlink export` (also `/hl export`), to open a single export
-chooser. Select either a compact code for the Consecrated Hammer site or a
-Markdown report you can paste directly into ChatGPT, Claude or another AI.
+HammerLink is a local World of Warcraft character-data exporter and a readable
+bridge from WoW to AI assistants. Use its minimap button, or type
+`/hammerlink export` (also `/hl export`), to open one export chooser. Select a
+compact `HL1:` snapshot for a compatible importer or a Markdown report to paste
+directly into ChatGPT, Claude or another AI.
 
 The chooser shows a live record count for every category and the total selected
 output. AI-readable sections expected to add substantial text get a warning
@@ -33,15 +33,20 @@ It reads the client’s live state, which the public Blizzard Profile API does n
 - the complete set of owned Housing Catalog decor entries, including storage,
   placed and redeemable counts (account housing data, when the client catalog
   has finished loading);
-- learned profession recipes positively observed after opening the matching
-  profession window; unopened professions remain unknown rather than empty;
+- learned profession recipes, gathering techniques and bonuses positively
+  observed after opening the matching profession window; unopened professions
+  remain unknown rather than empty;
+- current spellbook entries exposed by the client, with spell IDs, skill lines,
+  passive/off-spec flags and spellbook/flyout source where available;
 - character identity, class, spec and item level at capture time.
 
-The addon makes no network requests. `HL1:` exports are a versioned JSON
-snapshot compressed with embedded LibDeflate and encoded for safe copy/paste.
-AI-readable exports use structured Markdown with names and IDs where available.
-Neither format is encrypted: players should review and treat both as shareable
-character data.
+The addon makes no network requests. `HL1:` exports are versioned UTF-8 JSON
+snapshots compressed with embedded LibDeflate and encoded with LibDeflate's
+printable alphabet for safe copy/paste. They are not Base64 and they are not
+encrypted. To inspect one programmatically, remove the `HL1:` prefix, run
+LibDeflate `DecodeForPrint`, then `DecompressDeflate`, and parse the resulting
+UTF-8 JSON. AI-readable exports use structured Markdown with names and IDs
+where available. Review either format before sharing it as character data.
 
 ## Artwork
 
