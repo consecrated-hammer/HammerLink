@@ -2,14 +2,16 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.7.1"
+ns.VERSION = "0.8.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
+local DEFAULT_EXPORT_FORMAT = "ai"
 
 local DEFAULT_OPTIONS = {
     equipment = true,
     bagItems = true,
+    currentSpellbook = true,
     talents = true,
     vault = true,
     currencyCaps = true,
@@ -29,6 +31,18 @@ end
 function ns.ResetExportOptions()
     ns.db.options = {}
     for category, enabled in pairs(DEFAULT_OPTIONS) do ns.db.options[category] = enabled end
+end
+
+function ns.GetExportFormat()
+    local format = ns.db and ns.db.exportFormat
+    if format == "compact" or format == "ai" then return format end
+    return DEFAULT_EXPORT_FORMAT
+end
+
+function ns.SetExportFormat(format)
+    if not ns.db or (format ~= "compact" and format ~= "ai") then return false end
+    ns.db.exportFormat = format
+    return true
 end
 
 function ns.RefreshDecorInventory()
@@ -236,7 +250,7 @@ function ns.GetProfessionRecipes()
     if not cache or type(cache.lines) ~= "table" or not next(cache.lines) then
         return {
             available = false, capturedAt = time(), professions = {},
-            reason = "Open each profession window once to cache its learned recipes; uncached professions are unknown.",
+            reason = "One-time setup per character: open each profession once. Reopen that profession after learning something new to refresh HammerLink's saved cache. Unopened professions are unknown, not evidence that the character has no recipes or techniques.",
         }
     end
     local result = { available = true, capturedAt = cache.updatedAt or time(), professions = {}, truncated = cache.truncated == true }
@@ -302,6 +316,9 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         ns.db = HammerLinkDB
         ns.db.schemaVersion = 2
         ns.db.options = ns.db.options or {}
+        if ns.db.exportFormat ~= "compact" and ns.db.exportFormat ~= "ai" then
+            ns.db.exportFormat = DEFAULT_EXPORT_FORMAT
+        end
         for category, enabled in pairs(DEFAULT_OPTIONS) do
             if ns.db.options[category] == nil then ns.db.options[category] = enabled end
         end

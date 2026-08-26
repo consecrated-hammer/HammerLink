@@ -1,5 +1,5 @@
 local namespace = {}
-local exportOptions = { equipment = true, bagItems = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true, professionRecipes = true }
+local exportOptions = { equipment = true, bagItems = true, currentSpellbook = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true, professionRecipes = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
 namespace.GetDecorInventory = function() return {
@@ -35,7 +35,11 @@ INVSLOT_TRINKET2 = 14
 INVSLOT_MAINHAND = 16
 INVSLOT_OFFHAND = 17
 NUM_BAG_SLOTS = 4
-Enum = { BagIndex = { Backpack = 0, ReagentBag = 5 } }
+Enum = {
+    BagIndex = { Backpack = 0, ReagentBag = 5 },
+    SpellBookSpellBank = { Player = 0 },
+    SpellBookItemType = { Spell = 1, Flyout = 2 },
+}
 LOCALIZED_CLASS_NAMES_MALE = { SHAMAN = "Shaman" }
 
 function UnitFullName() return "Bluehoof", "Dath'Remar" end
@@ -83,7 +87,7 @@ C_Item = {
         return id == 2001 and "Bag Helm" or "Item", link, 4, 701, 80, "Armor", "Plate", 1, "INVTYPE_HEAD", 20, 12345, 4, 4, 2, 10, 99, false
     end,
     GetDetailedItemLevelInfo = function(link) return link:find("2001", 1, true) and 710 or 700 end,
-    GetItemStats = function(link) return link:find("2001", 1, true) and { ITEM_MOD_STRENGTH_SHORT = 123, ITEM_MOD_HASTE_RATING_SHORT = 456 } or {} end,
+    GetItemStats = function(link) return link:find("2001", 1, true) and { ITEM_MOD_STRENGTH_SHORT = 123, ITEM_MOD_HASTE_RATING_SHORT = 456, ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 51.730770111084 } or {} end,
     GetItemGem = function(link, socket)
         if link:find("2001", 1, true) and socket == 1 then return "Test Gem", "|cff0070dd|Hitem:3001:0:0:0|h[Test Gem]|h|r" end
     end,
@@ -119,10 +123,28 @@ C_CurrencyInfo = {
     end,
     GetCurrencyInfo = function(currencyID)
         if currencyID == 3284 then
-            return { name = "Gilded Crest", quantity = 42, maxQuantity = 90, maxWeeklyQuantity = 30, quantityEarnedThisWeek = 12, totalEarned = 312, canEarnPerWeek = true, useTotalEarnedForMaxQty = true, isAccountWide = false, isAccountTransferable = true }
+            return { name = "Gilded Crest", quantity = 42, maxQuantity = 90, maxWeeklyQuantity = 30, quantityEarnedThisWeek = 12, totalEarned = 52, canEarnPerWeek = true, useTotalEarnedForMaxQty = true, isAccountWide = false, isAccountTransferable = true }
         end
     end,
 }
+C_SpellBook = {
+    GetNumSpellBookSkillLines = function() return 2 end,
+    GetSpellBookSkillLineInfo = function(index)
+        if index == 1 then return { name = "Enhancement", itemIndexOffset = 0, numSpellBookItems = 2 } end
+        return { name = "Shaman", itemIndexOffset = 2, numSpellBookItems = 1 }
+    end,
+    GetSpellBookItemInfo = function(index)
+        if index == 1 then return { itemType = 1, spellID = 188389, name = "Flame Shock", isPassive = false } end
+        if index == 2 then return { itemType = 2, actionID = 50 } end
+        return { itemType = 1, spellID = 1230990, name = "Improved Stormstrike", isPassive = true }
+    end,
+}
+C_Spell = { GetSpellName = function(spellID) if spellID == 57994 then return "Wind Shear" end end }
+function GetFlyoutInfo() return "Shaman utility", nil, 2, true end
+function GetFlyoutSlotInfo(_, slot)
+    if slot == 1 then return 57994, 0, true, nil end
+    return 99999, 0, false, "Unlearned Test"
+end
 
 assert(loadfile("Export.lua"))("HammerLink", namespace)
 local snapshot = namespace.BuildSnapshot()
@@ -155,11 +177,14 @@ assert(snapshot.decorInventory.available and snapshot.decorInventory.truncated =
 assert(snapshot.decorInventory.packedItems[1][1] == 77 and snapshot.decorInventory.packedItems[1][2] == "Warm Chair", "expected compact housing row")
 assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
 assert(snapshot.exportOptions.questLog and snapshot.questLog.available and #snapshot.questLog.entries == 2, "expected current quest log")
+assert(snapshot.exportOptions.currentSpellbook and snapshot.currentSpellbook.available and #snapshot.currentSpellbook.spells == 3, "expected current spellbook export")
+assert(snapshot.currentSpellbook.spells[1].name == "Flame Shock" and snapshot.currentSpellbook.spells[2].isPassive, "expected sorted spell identity and passive state")
 assert(snapshot.exportOptions.professionRecipes and snapshot.professionRecipes.available, "expected learned profession recipe export")
 assert(snapshot.professionRecipes.professions[1].recipes[1].recipeID == 1261659, "expected cached learned recipe")
 local summary = namespace.FormatExportSummary(snapshot)
 assert(summary:find("equipped 1", 1, true) and summary:find("bag items 3", 1, true), "expected chat export counts")
-assert(summary:find("learned recipes 1", 1, true), "expected learned recipe count in chat summary")
+assert(summary:find("profession entries 1", 1, true), "expected profession entry count in chat summary")
+assert(summary:find("current spells 3", 1, true), "expected current spell count in chat summary")
 assert(snapshot.questLog.totalQuests == 2, "expected quest count without header rows")
 local quest = snapshot.questLog.entries[1]
 assert(quest.questID == 9001 and quest.logIndex == 2 and quest.isComplete == false, "expected quest identity and completion")
@@ -195,7 +220,8 @@ completeSnapshot.vault = {
 local equipmentInfo = namespace.GetExportCategoryInfo(completeSnapshot, "equipment")
 local bagInfo = namespace.GetExportCategoryInfo(completeSnapshot, "bagItems")
 local recipeInfo = namespace.GetExportCategoryInfo(completeSnapshot, "professionRecipes")
-assert(equipmentInfo.count == 1 and bagInfo.count == 3 and recipeInfo.count == 1, "expected chooser category counts from the captured snapshot")
+local spellInfo = namespace.GetExportCategoryInfo(completeSnapshot, "currentSpellbook")
+assert(equipmentInfo.count == 1 and bagInfo.count == 3 and recipeInfo.count == 1 and spellInfo.count == 3, "expected chooser category counts from the captured snapshot")
 assert(equipmentInfo.characters > 0 and recipeInfo.characters > 0, "expected rendered section sizes for chooser warnings")
 
 local aiReport = namespace.BuildAIReport(completeSnapshot)
@@ -212,13 +238,24 @@ assert(aiReport:find("raid Defeat 1 Midnight Boss", 1, true), "expected singular
 assert(aiReport:find("raid Defeat the required number of future Bosses", 1, true), "expected readable fallback when a Vault threshold is unavailable")
 assert(not aiReport:find("%d", 1, true) and not aiReport:find("|4", 1, true), "expected no raw Blizzard grammar in the report")
 assert(aiReport:find("Bag Helm", 1, true) and aiReport:find("ITEM_MOD_STRENGTH_SHORT 123", 1, true), "expected readable bag item details")
+assert(aiReport:find("ITEM_MOD_DAMAGE_PER_SECOND_SHORT 51.73", 1, true) and not aiReport:find("51.730770111084", 1, true), "expected readable stat precision")
+assert(aiReport:find("current amount 42", 1, true), "expected current currency balance to be explicit")
+assert(aiReport:find("weekly cap progress 12/30", 1, true), "expected weekly currency cap progress")
+assert(aiReport:find("season-cap progress 52/90", 1, true), "expected seasonal currency cap progress instead of ambiguous total-earned labels")
+assert(not aiReport:find("total earned", 1, true), "expected ambiguous currency API labels to be omitted")
 assert(aiReport:find("Warm Chair", 1, true) and aiReport:find("record ID 77", 1, true), "expected readable decor record")
 assert(aiReport:find("A Dark Errand", 1, true) and aiReport:find("quest ID 9001", 1, true), "expected readable quest identity")
 assert(aiReport:find("Ironforge Chandelier", 1, true) and aiReport:find("recipe ID 1261659", 1, true), "expected readable learned recipe identity")
+assert(aiReport:find("Current spellbook: included — 3 records", 1, true), "expected current spellbook in report scope")
+assert(aiReport:find("Wind Shear", 1, true) and aiReport:find("spell ID 57994", 1, true), "expected flyout spell identity in readable report")
+assert(aiReport:find("Improved Stormstrike", 1, true) and aiReport:find("passive", 1, true), "expected passive spell state in readable report")
+assert(aiReport:find("marked off-spec abilities", 1, true), "expected accurate spellbook scope wording")
+assert(not aiReport:find("source spellbook", 1, true) and aiReport:find("flyout", 1, true), "expected only exceptional flyout provenance")
+assert(aiReport:find("Cached positive observations", 1, true) and aiReport:find("Missing entries remain unknown", 1, true), "expected permanent profession completeness guidance")
 assert(aiReport:find("Omitted, unavailable and unknown data are not evidence", 1, true), "expected conservative data-state guidance")
 
 local vaultOnly = {
-    equipment = false, bagItems = false, talents = false, vault = true,
+    equipment = false, bagItems = false, currentSpellbook = false, talents = false, vault = true,
     currencyCaps = false, decorInventory = false, questLog = false,
     professionRecipes = false,
 }
@@ -237,11 +274,12 @@ assert(zeroVaultReport:find("Great Vault: included — 0 records", 1, true), "ex
 C_WeeklyRewards = nil
 
 exportOptions.bagItems = false
+exportOptions.currentSpellbook = false
 exportOptions.vault = false
 exportOptions.questLog = false
 exportOptions.professionRecipes = false
 local reducedSnapshot = namespace.BuildSnapshot()
-assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
+assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.currentSpellbook == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
 assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
 assert(namespace.FormatExportSummary(reducedSnapshot):find("bag items omitted", 1, true), "expected omitted category in chat summary")
 
@@ -260,7 +298,7 @@ unknownRecipes.professionRecipes = {
 local unknownInfo = namespace.GetExportCategoryInfo(unknownRecipes, "professionRecipes")
 local unknownReport = namespace.BuildAIReport(unknownRecipes)
 assert(unknownInfo.unavailable and unknownInfo.count == 0, "expected unavailable recipe data instead of a false zero")
-assert(unknownReport:find("Learned profession recipes: unavailable or unknown", 1, true), "expected unknown recipe state in report scope")
+assert(unknownReport:find("Learned recipes and techniques: unavailable or unknown", 1, true), "expected unknown profession state in report scope")
 assert(unknownReport:find("uncached professions are unknown", 1, true), "expected unavailable reason in readable report")
 
 print("HammerLink export tests passed")

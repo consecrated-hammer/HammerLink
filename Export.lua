@@ -219,6 +219,110 @@ local function talentExport()
     return ok and importString or nil
 end
 
+local function currentSpellbook()
+    local snapshot = {
+        available = false,
+        capturedAt = time(),
+        scope = "current_character_active_specialization",
+        spells = {},
+        truncated = false,
+    }
+    if not C_SpellBook or not C_SpellBook.GetNumSpellBookSkillLines
+        or not C_SpellBook.GetSpellBookSkillLineInfo or not C_SpellBook.GetSpellBookItemInfo then
+        snapshot.reason = "The Retail spellbook API is unavailable in this client."
+        return snapshot
+    end
+
+    local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+    if bank == nil then
+        snapshot.reason = "The player spellbook could not be identified in this client."
+        return snapshot
+    end
+
+    local countOK, skillLineCount = pcall(C_SpellBook.GetNumSpellBookSkillLines)
+    if not countOK or type(skillLineCount) ~= "number" then
+        snapshot.reason = "The current character spellbook could not be read."
+        return snapshot
+    end
+
+    snapshot.available = true
+    local seen = {}
+    local maximumSpells = 2048
+    local spellItemType = Enum and Enum.SpellBookItemType and Enum.SpellBookItemType.Spell
+    local flyoutItemType = Enum and Enum.SpellBookItemType and Enum.SpellBookItemType.Flyout
+
+    local function spellName(spellID, fallback)
+        if type(fallback) == "string" and fallback ~= "" then return fallback end
+        if C_Spell and C_Spell.GetSpellName then
+            local ok, name = pcall(C_Spell.GetSpellName, spellID)
+            if ok and type(name) == "string" and name ~= "" then return name end
+        end
+        return nil
+    end
+
+    local function addSpell(spellID, name, passive, skillLine, source, offSpec)
+        if type(spellID) ~= "number" or spellID <= 0 or seen[spellID] then return end
+        name = spellName(spellID, name)
+        if not name then return end
+        if #snapshot.spells >= maximumSpells then snapshot.truncated = true return end
+        seen[spellID] = true
+        snapshot.spells[#snapshot.spells + 1] = {
+            spellID = spellID,
+            name = name,
+            isPassive = passive == true,
+            isOffSpec = offSpec == true,
+            skillLine = skillLine,
+            source = source,
+        }
+    end
+
+    local lineLimit = math.min(skillLineCount, 128)
+    if skillLineCount > lineLimit then snapshot.truncated = true end
+    for lineIndex = 1, lineLimit do
+        local lineOK, lineInfo = pcall(C_SpellBook.GetSpellBookSkillLineInfo, lineIndex)
+        if lineOK and type(lineInfo) == "table" then
+            local offset = tonumber(lineInfo.itemIndexOffset)
+            local itemCount = tonumber(lineInfo.numSpellBookItems)
+            if offset and itemCount and itemCount > 0 then
+                local itemLimit = math.min(itemCount, 1024)
+                if itemCount > itemLimit then snapshot.truncated = true end
+                for itemOffset = 1, itemLimit do
+                    local itemIndex = offset + itemOffset
+                    local itemOK, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, itemIndex, bank)
+                    if itemOK and type(itemInfo) == "table" then
+                        local isSpell = spellItemType == nil and type(itemInfo.spellID) == "number"
+                            or itemInfo.itemType == spellItemType
+                        if isSpell then
+                            addSpell(itemInfo.spellID, itemInfo.name, itemInfo.isPassive,
+                                lineInfo.name, "spellbook", itemInfo.isOffSpec)
+                        end
+
+                        local isFlyout = flyoutItemType ~= nil and itemInfo.itemType == flyoutItemType
+                        if isFlyout and type(itemInfo.actionID) == "number"
+                            and type(GetFlyoutInfo) == "function" and type(GetFlyoutSlotInfo) == "function" then
+                            local flyoutOK, _, _, slotCount = pcall(GetFlyoutInfo, itemInfo.actionID)
+                            if flyoutOK and type(slotCount) == "number" then
+                                for slot = 1, math.min(slotCount, 128) do
+                                    local slotOK, spellID, overrideSpellID, isKnown, name = pcall(GetFlyoutSlotInfo, itemInfo.actionID, slot)
+                                    if slotOK and isKnown == true then
+                                        local effectiveSpellID = type(overrideSpellID) == "number" and overrideSpellID > 0 and overrideSpellID or spellID
+                                        addSpell(effectiveSpellID, name, false, lineInfo.name, "flyout", false)
+                                    end
+                                end
+                                if slotCount > 128 then snapshot.truncated = true end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    table.sort(snapshot.spells, function(a, b)
+        return a.name == b.name and a.spellID < b.spellID or a.name < b.name
+    end)
+    return snapshot
+end
+
 local function reward(rewardInfo)
     local value = { type = rewardInfo.type, id = rewardInfo.id, quantity = rewardInfo.quantity }
     if rewardInfo.itemDBID and C_WeeklyRewards and C_WeeklyRewards.GetItemHyperlink then
@@ -382,22 +486,22 @@ local function questLog()
 end
 
 local CATEGORY_ORDER = {
-    "equipment", "bagItems", "talents", "vault", "currencyCaps",
+    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps",
     "decorInventory", "questLog", "professionRecipes",
 }
 
 local CATEGORY_FIELDS = {
-    equipment = "equipment", bagItems = "bagEquipment", talents = "talents",
+    equipment = "equipment", bagItems = "bagEquipment", currentSpellbook = "currentSpellbook", talents = "talents",
     vault = "vault", currencyCaps = "currencyCaps",
     decorInventory = "decorInventory", questLog = "questLog",
     professionRecipes = "professionRecipes",
 }
 
 local CATEGORY_TITLES = {
-    equipment = "Equipped gear", bagItems = "Bag items", talents = "Active talents",
+    equipment = "Equipped gear", bagItems = "Bag items", currentSpellbook = "Current spellbook", talents = "Active talents",
     vault = "Great Vault", currencyCaps = "Currency caps",
     decorInventory = "Housing decor inventory", questLog = "Current quest log",
-    professionRecipes = "Learned profession recipes",
+    professionRecipes = "Learned recipes and techniques",
 }
 
 local function selectedOptions(options)
@@ -417,6 +521,7 @@ function ns.BuildSnapshot(options)
     }
     if selected.equipment then snapshot.equipment = equipment() end
     if selected.bagItems then snapshot.bagEquipment = bagEquipment() end
+    if selected.currentSpellbook then snapshot.currentSpellbook = currentSpellbook() end
     if selected.talents then snapshot.talents = { importString = talentExport() } end
     if selected.vault then snapshot.vault = vault() end
     if selected.currencyCaps then snapshot.currencyCaps = currencyCaps() end
@@ -471,6 +576,8 @@ function ns.FormatExportSummary(snapshot)
     end
     add("equipped", options.equipment, #(snapshot.equipment or {}))
     add("bag items", options.bagItems, #(snapshot.bagEquipment or {}))
+    local spellbook = snapshot.currentSpellbook
+    add("current spells", options.currentSpellbook, spellbook and #(spellbook.spells or {}) or 0, spellbook and spellbook.available == false)
     add("talents", options.talents, snapshot.talents and snapshot.talents.importString and 1 or 0)
     add("Vault activities", options.vault, snapshot.vault and #(snapshot.vault.activities or {}) or 0)
     add("currency caps", options.currencyCaps, #(snapshot.currencyCaps or {}))
@@ -479,7 +586,7 @@ function ns.FormatExportSummary(snapshot)
     local quests = snapshot.questLog
     add("quests", options.questLog, quests and #(quests.entries or {}) or 0, quests and quests.available == false)
     local recipes = snapshot.professionRecipes
-    add("learned recipes", options.professionRecipes, countRecipes(recipes), recipes and recipes.available == false)
+    add("profession entries", options.professionRecipes, countRecipes(recipes), recipes and recipes.available == false)
     return "exported — " .. table.concat(parts, "; ")
 end
 
@@ -562,6 +669,7 @@ end
 local function categoryCount(snapshot, category)
     if category == "equipment" then return #(snapshot.equipment or {}) end
     if category == "bagItems" then return #(snapshot.bagEquipment or {}) end
+    if category == "currentSpellbook" then return snapshot.currentSpellbook and #(snapshot.currentSpellbook.spells or {}) or 0 end
     if category == "talents" then return snapshot.talents and snapshot.talents.importString and 1 or 0 end
     if category == "vault" then return snapshot.vault and #(snapshot.vault.activities or {}) or 0 end
     if category == "currencyCaps" then return #(snapshot.currencyCaps or {}) end
@@ -582,7 +690,7 @@ local function categoryUnavailable(snapshot, category)
         return not (value and (value.currentPeriod ~= nil or value.hasAvailableRewards ~= nil
             or value.hasGeneratedRewards ~= nil or value.dungeonRuns or #(value.activities or {}) > 0))
     end
-    if category == "decorInventory" or category == "questLog" or category == "professionRecipes" then
+    if category == "currentSpellbook" or category == "decorInventory" or category == "questLog" or category == "professionRecipes" then
         return value and value.available == false
     end
     return false
@@ -592,6 +700,7 @@ local function unavailableReason(snapshot, category)
     local value = snapshot[CATEGORY_FIELDS[category]]
     if value and value.reason then return plain(value.reason) end
     if category == "talents" then return "The active talent import string was not available from the client." end
+    if category == "currentSpellbook" then return "The current character spellbook was not available from the client." end
     if category == "vault" then return "Great Vault data was not available from the client." end
     return "This category was unavailable when the report was captured."
 end
@@ -637,7 +746,7 @@ local function reportSection(snapshot, category)
             append(lines, itemLine(item, "Bag " .. tostring(item.bag or "?") .. ", slot " .. tostring(item.slot or "?")))
             if item.stats then
                 local stats = {}
-                for stat, amount in pairs(item.stats) do stats[#stats + 1] = plain(stat) .. " " .. tostring(amount) end
+                for stat, amount in pairs(item.stats) do stats[#stats + 1] = plain(stat) .. " " .. decimalText(amount) end
                 table.sort(stats)
                 if #stats > 0 then append(lines, "  - Stats: " .. table.concat(stats, "; ")) end
             end
@@ -646,6 +755,21 @@ local function reportSection(snapshot, category)
                     .. plain(gem.name or linkName(gem.link) or "Unknown gem")
                     .. (gem.itemID and " (item ID " .. tostring(gem.itemID) .. ")" or ""))
             end
+        end
+    elseif category == "currentSpellbook" then
+        local spellbook = snapshot.currentSpellbook or {}
+        append(lines, "_Scope: entries currently exposed in this character's spellbook. The client can include marked off-spec abilities; hidden and inactive-specialisation coverage may be incomplete._")
+        append(lines, "")
+        if spellbook.truncated then append(lines, "- **Truncated:** yes") end
+        for _, spell in ipairs(spellbook.spells or {}) do
+            local properties = {}
+            if spell.isPassive then properties[#properties + 1] = "passive" end
+            if spell.isOffSpec then properties[#properties + 1] = "off-spec" end
+            addValue(properties, "skill line", spell.skillLine)
+            if spell.source == "flyout" then properties[#properties + 1] = "flyout" end
+            append(lines, "- " .. plain(spell.name or "Unknown spell")
+                .. " (spell ID " .. tostring(spell.spellID or "unknown")
+                .. (#properties > 0 and "; " .. table.concat(properties, "; ") or "") .. ")")
         end
     elseif category == "talents" then
         append(lines, "```text")
@@ -688,11 +812,15 @@ local function reportSection(snapshot, category)
         for _, currency in ipairs(snapshot.currencyCaps or {}) do
             local parts = {}
             addValue(parts, "currency ID", currency.currencyID)
-            addValue(parts, "quantity", currency.quantity)
-            addValue(parts, "weekly earned", currency.quantityEarnedThisWeek)
-            addValue(parts, "weekly cap", currency.maxWeeklyQuantity)
-            addValue(parts, "total earned", currency.totalEarned)
-            addValue(parts, "maximum", currency.maxQuantity)
+            addValue(parts, "current amount", currency.quantity)
+            if currency.canEarnPerWeek and currency.maxWeeklyQuantity and currency.maxWeeklyQuantity > 0 then
+                addValue(parts, "weekly cap progress", tostring(currency.quantityEarnedThisWeek or 0) .. "/" .. tostring(currency.maxWeeklyQuantity))
+            end
+            if currency.useTotalEarnedForMaxQty and currency.maxQuantity and currency.maxQuantity > 0 then
+                addValue(parts, "season-cap progress", tostring(currency.totalEarned or 0) .. "/" .. tostring(currency.maxQuantity))
+            elseif currency.maxQuantity and currency.maxQuantity > 0 then
+                addValue(parts, "holding cap", currency.maxQuantity)
+            end
             addValue(parts, "account-wide", boolText(currency.isAccountWide))
             addValue(parts, "transferable", boolText(currency.isAccountTransferable))
             append(lines, "- " .. plain(currency.name or "Unknown currency") .. " (" .. table.concat(parts, "; ") .. ")")
@@ -748,6 +876,8 @@ local function reportSection(snapshot, category)
         end
     elseif category == "professionRecipes" then
         local professions = snapshot.professionRecipes or {}
+        append(lines, "_Cached positive observations from Retail's profession list, including recipes, gathering techniques and bonuses. Missing entries remain unknown; reopen a profession after learning something new._")
+        append(lines, "")
         if professions.truncated then append(lines, "**Truncated:** yes") append(lines, "") end
         for _, profession in ipairs(professions.professions or {}) do
             local skill = profession.skillLevel and (" — skill " .. tostring(profession.skillLevel)

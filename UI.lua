@@ -95,14 +95,24 @@ local function showOutput(output, snapshot, format)
 end
 
 local exportCategories = {
-    { key = "equipment", title = "Equipped gear", detail = "Current equipment links and slots." },
-    { key = "bagItems", title = "Bag items", detail = "Every occupied backpack, bag and reagent-bag slot." },
-    { key = "talents", title = "Active talents", detail = "The active talent import string when the client exposes it." },
-    { key = "vault", title = "Great Vault", detail = "Exact current in-game Vault progress and generated rewards." },
-    { key = "currencyCaps", title = "Currency caps", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
-    { key = "decorInventory", title = "Housing decor inventory", detail = "Owned Housing Catalog decor, including stored and placed counts." },
-    { key = "questLog", title = "Current quest log", detail = "Active quests, objective progress, quest types and available waypoints." },
-    { key = "professionRecipes", title = "Learned profession recipes", detail = "Cached when you open each profession; unopened professions remain unknown." },
+    { key = "equipment", title = "Equipped gear", icon = "Interface\\Icons\\INV_Chest_Chain_05", detail = "Current equipment links and slots." },
+    { key = "bagItems", title = "Bag items", icon = "Interface\\Buttons\\Button-Backpack-Up", detail = "Every occupied backpack, bag and reagent-bag slot." },
+    { key = "currentSpellbook", title = "Current spellbook", icon = "Interface\\Icons\\INV_Misc_Book_09", detail = "General, class and active-specialisation spells currently exposed by the client." },
+    { key = "talents", title = "Active talents", icon = "Interface\\Icons\\INV_Misc_Book_11", detail = "The active talent import string when the client exposes it." },
+    { key = "vault", title = "Great Vault", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Exact current in-game Vault progress and generated rewards." },
+    { key = "currencyCaps", title = "Currency caps", icon = "Interface\\Icons\\INV_Misc_Coin_01", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
+    { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05", detail = "Owned Housing Catalog decor, including stored and placed counts." },
+    { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01", detail = "Active quests, objective progress, quest types and available waypoints." },
+    { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
+}
+
+local exportFormats = {
+    { value = "ai", text = "AI-readable report" },
+    { value = "compact", text = "Consecrated Hammer code" },
+}
+local exportFormatLabels = {
+    ai = "AI-readable report",
+    compact = "Consecrated Hammer code",
 }
 
 local LARGE_SECTION_CHARACTERS = 5000
@@ -125,6 +135,10 @@ local function recordCountText(value)
     return commaNumber(value) .. (value == 1 and " record" or " records")
 end
 
+local function kilobyteText(characters)
+    return string.format("%.1fKB", (tonumber(characters) or 0) / 1024)
+end
+
 local function createWarning(parent)
     local warning = CreateFrame("Frame", nil, parent)
     warning:SetSize(18, 18)
@@ -142,6 +156,24 @@ local function createWarning(parent)
     warning:SetScript("OnLeave", function() GameTooltip:Hide() end)
     warning:Hide()
     return warning
+end
+
+local function createActionNotice(parent)
+    local notice = CreateFrame("Frame", nil, parent)
+    notice:SetSize(20, 20)
+    local icon = notice:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    icon:SetAtlas("QuestNormal")
+    notice.icon = icon
+    notice:EnableMouse(true)
+    notice:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Action required")
+        GameTooltip:AddLine("Open each profession once on this character. Reopen it after learning recipes to refresh the saved cache.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    notice:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return notice
 end
 
 local function selectedSnapshot(f)
@@ -165,8 +197,8 @@ local function refreshChooser(f)
         local large = f.format == "ai" and checked and info.characters >= LARGE_SECTION_CHARACTERS
         if large then
             row.warning.tooltipText = category.title .. " will add about "
-                .. commaNumber(info.characters) .. " characters across "
-                .. recordCountText(info.count) .. ". It will still export normally."
+                .. kilobyteText(info.characters) .. " across "
+                .. recordCountText(info.count) .. "."
             row.warning:Show()
         else
             row.warning:Hide()
@@ -177,20 +209,11 @@ local function refreshChooser(f)
             selectedCharacters = selectedCharacters + info.characters
         end
     end
-    if f.format == "compact" then
-        f.compact:LockHighlight()
-        f.compact:SetAlpha(1)
-        f.ai:UnlockHighlight()
-        f.ai:SetAlpha(0.5)
-    else
-        f.compact:UnlockHighlight()
-        f.compact:SetAlpha(0.5)
-        f.ai:LockHighlight()
-        f.ai:SetAlpha(1)
-    end
+    UIDropDownMenu_SetSelectedValue(f.formatDropdown, f.format)
+    UIDropDownMenu_SetText(f.formatDropdown, exportFormatLabels[f.format])
     local footer = recordCountText(selectedCount) .. " across " .. tostring(selectedCategories) .. " categories"
     if f.format == "ai" then
-        footer = footer .. " · about " .. commaNumber(selectedCharacters) .. " characters"
+        footer = footer .. " · about " .. kilobyteText(selectedCharacters)
     else
         footer = footer .. " · compressed when generated"
     end
@@ -198,7 +221,8 @@ local function refreshChooser(f)
 end
 
 local function setFormat(f, format)
-    f.format = format
+    if not ns.SetExportFormat(format) then return end
+    f.format = ns.GetExportFormat()
     refreshChooser(f)
 end
 
@@ -232,47 +256,74 @@ local function createChooserDialog()
     formatLabel:SetPoint("TOPLEFT", 28, -78)
     formatLabel:SetText("1. Choose a format")
 
-    local compact = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    compact:SetSize(232, 26)
-    compact:SetPoint("TOPLEFT", 34, -102)
-    compact:SetText("Consecrated Hammer code")
-    compact:SetScript("OnClick", function() setFormat(f, "compact") end)
-    f.compact = compact
-
-    local ai = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    ai:SetSize(232, 26)
-    ai:SetPoint("TOPLEFT", 302, -102)
-    ai:SetText("AI-readable report")
-    ai:SetScript("OnClick", function() setFormat(f, "ai") end)
-    f.ai = ai
+    local formatDropdown = CreateFrame("Frame", "HammerLinkFormatDropdown", f, "UIDropDownMenuTemplate")
+    formatDropdown:SetPoint("TOPLEFT", 12, -96)
+    UIDropDownMenu_SetWidth(formatDropdown, 210)
+    local formatDropdownText = formatDropdown.Text or _G.HammerLinkFormatDropdownText
+    if formatDropdownText then formatDropdownText:SetJustifyH("LEFT") end
+    UIDropDownMenu_Initialize(formatDropdown, function()
+        for _, option in ipairs(exportFormats) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.value = option.value
+            info.checked = f.format == option.value
+            info.func = function() setFormat(f, option.value) end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    f.formatDropdown = formatDropdown
 
     local categoryLabel = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     categoryLabel:SetPoint("TOPLEFT", 28, -140)
     categoryLabel:SetText("2. Choose the data")
 
+    local categoryScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    categoryScroll:SetPoint("TOPLEFT", 24, -153)
+    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 77)
+    local categoryContent = CreateFrame("Frame", nil, categoryScroll)
+    categoryContent:SetSize(510, math.max(410, #exportCategories * 45))
+    categoryScroll:SetScrollChild(categoryContent)
+    f.categoryScroll = categoryScroll
+    f.categoryContent = categoryContent
+
     f.rows = {}
     for index, category in ipairs(exportCategories) do
-        local check = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-        check:SetPoint("TOPLEFT", 30, -158 - (index - 1) * 45)
+        local rowTop = -4 - (index - 1) * 45
+        local check = CreateFrame("CheckButton", nil, categoryContent, "UICheckButtonTemplate")
+        check:SetSize(28, 28)
+        check:SetPoint("TOPLEFT", 6, rowTop)
+        local categoryIcon = categoryContent:CreateTexture(nil, "ARTWORK")
+        categoryIcon:SetSize(28, 28)
+        categoryIcon:SetPoint("LEFT", check, "RIGHT", 0, 0)
+        categoryIcon:SetTexture(category.icon)
+        check.Text:ClearAllPoints()
+        check.Text:SetPoint("TOPLEFT", categoryIcon, "TOPRIGHT", 5, -1)
+        check.Text:SetHeight(14)
+        check.Text:SetJustifyV("TOP")
         check.Text:SetText(category.title)
         check.Text:SetFontObject("GameFontHighlightSmall")
-        local detail = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        local detail = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
         detail:SetPoint("TOPLEFT", check.Text, "BOTTOMLEFT", 0, -2)
-        detail:SetWidth(460)
+        detail:SetWidth(430)
         detail:SetJustifyH("LEFT")
         detail:SetText(category.detail)
-        local count = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        count:SetPoint("RIGHT", f, "RIGHT", -48, 0)
-        count:SetPoint("TOP", f, "TOP", 0, -161 - (index - 1) * 45)
+        local count = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        count:SetPoint("RIGHT", categoryContent, "RIGHT", -26, 0)
+        count:SetPoint("TOP", categoryContent, "TOP", 0, rowTop - 3)
         count:SetJustifyH("RIGHT")
-        local warning = createWarning(f)
-        warning:SetPoint("RIGHT", f, "RIGHT", -25, 0)
-        warning:SetPoint("TOP", f, "TOP", 0, -158 - (index - 1) * 45)
+        local warning = createWarning(categoryContent)
+        warning:SetPoint("RIGHT", categoryContent, "RIGHT", -4, 0)
+        warning:SetPoint("TOP", categoryContent, "TOP", 0, rowTop)
+        local actionNotice
+        if category.key == "professionRecipes" then
+            actionNotice = createActionNotice(categoryContent)
+            actionNotice:SetPoint("LEFT", check.Text, "RIGHT", 2, 2)
+        end
         check:SetScript("OnClick", function(self)
             ns.db.options[category.key] = self:GetChecked() and true or false
             refreshChooser(f)
         end)
-        f.rows[category.key] = { check = check, count = count, warning = warning }
+        f.rows[category.key] = { check = check, icon = categoryIcon, detail = detail, count = count, warning = warning, actionNotice = actionNotice }
     end
 
     local summary = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -328,7 +379,7 @@ function ns.ShowExport()
     chooserDialog = chooserDialog or createChooserDialog()
     if aboutDialog then aboutDialog:Hide() end
     chooserDialog.snapshot = snapshot
-    chooserDialog.format = "compact"
+    chooserDialog.format = ns.GetExportFormat()
     refreshChooser(chooserDialog)
     chooserDialog:Show()
 end
@@ -371,7 +422,7 @@ local function createAboutDialog()
     body:SetPoint("TOPLEFT", detail, "BOTTOMLEFT", 0, -20)
     body:SetWidth(444)
     body:SetJustifyH("LEFT")
-    body:SetText("HammerLink captures client-only character state for Consecrated Hammer or an AI-readable report: gear, every occupied bag slot, talents, Vault progress, capped currencies, quests, Housing decor and observed learned recipes. It never sends anything anywhere. Copy the export yourself; the addon is not your butler.")
+    body:SetText("HammerLink captures client-only character state for Consecrated Hammer or an AI-readable report: gear, every occupied bag slot, the current spellbook, talents, Vault progress, capped currencies, quests, Housing decor and observed profession entries. It never sends anything anywhere. Copy the export yourself; the addon is not your butler.")
 
     local tip = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     tip:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 0, -18)
@@ -382,7 +433,9 @@ local function createAboutDialog()
         local nextTip
         repeat nextTip = math.random(#aboutTips) until #aboutTips == 1 or nextTip ~= lastTip
         lastTip = nextTip
-        tip:SetText("|cfff2d493Link note:|r " .. aboutTips[nextTip])
+        local tipText = aboutTips[nextTip]
+        tip:SetText("|cfff2d493Tip:|r " .. tipText)
+        return tipText
     end
     showTip()
 
@@ -391,8 +444,7 @@ local function createAboutDialog()
     forge:SetPoint("BOTTOMLEFT", 28, 22)
     forge:SetText("Forge another link")
     forge:SetScript("OnClick", function()
-        showTip()
-        ns.Print("link forged. Nothing was uploaded. Obviously.")
+        ns.Print("Tip: " .. showTip())
     end)
 
     local options = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")

@@ -1,9 +1,9 @@
 ## Interface: 120100
 ## Title: HammerLink
-## Notes: Export selected in-game gear, Vault, currency-cap, Housing decor, quest-log and cached learned-recipe state for Consecrated Hammer.
+## Notes: Export selected in-game gear, spellbook, Vault, currency-cap, Housing decor, quest-log and cached profession state for Consecrated Hammer or AI use.
 ## Author: consecrated-hammer
-## Version: 0.7.1
-## X-ReleaseDate: 2026-08-24
+## Version: 0.8.0
+## X-ReleaseDate: 2026-08-27
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
 ## IconTexture: Interface\AddOns\HammerLink\Textures\HammerLinkMain

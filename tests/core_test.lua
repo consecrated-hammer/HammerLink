@@ -30,9 +30,12 @@ C_TradeSkillUI = {
 }
 
 assert(loadfile("Core.lua"))("HammerLink", namespace)
-assert(namespace.VERSION == "0.7.1", "expected the visible addon version")
+assert(namespace.VERSION == "0.8.0", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
+assert(namespace.GetExportFormat() == "ai" and namespace.db.exportFormat == "ai", "expected AI-readable exports to be the persisted default")
+assert(namespace.SetExportFormat("compact") and namespace.GetExportFormat() == "compact", "expected export format changes to persist")
+assert(not namespace.SetExportFormat("invalid") and namespace.GetExportFormat() == "compact", "expected invalid export formats to be rejected")
 assert(namespace.GetProfessionRecipes().available == false and namespace.db.professionRecipesByCharacter == nil, "expected an uncached export read to avoid SavedVariables writes")
 namespace.db.professionRecipes = { lines = { stale = { recipes = { old = { recipeID = 1, name = "Unsafe legacy cache" } } } } }
 assert(namespace.CaptureProfessionRecipes(), "expected opened profession recipes to be cached")

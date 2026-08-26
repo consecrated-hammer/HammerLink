@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.8.0] - 2026-08-27
+
+- Replace the format buttons with a native dropdown. AI-readable reports are
+  the default for new users, and HammerLink remembers the last selected format.
+- Make the learned-recipe setup requirement explicit: each profession window
+  must be opened once per character before its recipes can be included. A
+  native quest marker calls attention to the required action, and the copy
+  clarifies that the saved cache only needs refreshing after learning recipes.
+- Make Forge another link print the same newly generated tip shown in the About
+  panel, and rename the panel label from Link note to Tip.
+- Add an enabled-by-default Current spellbook category with spell names, IDs,
+  passive state, skill line and flyout provenance where the Retail client
+  exposes them. Its scope is explicit about inactive and hidden spells.
+- Show the approximate AI-readable report size in KB beside the character
+  estimate, and simplify large-section tooltips to their size estimate.
+- Add compact built-in WoW icons to every export category and attach the recipe
+  action marker directly to its category label.
+- Enlarge category icons and place the category list in a native scroll area so
+  future additions cannot push the summary and actions out of the dialog.
+- Top-align each category's title-and-description block with its checkbox and
+  icon, and inset the scroll area so its scrollbar clears the dialog border.
+- Clarify that current spellbook results can contain marked off-spec abilities
+  and that profession results are cached positive observations covering recipes,
+  gathering techniques and bonuses. Reduce repeated spell-source wording and
+  round readable item-stat values to two decimals.
+- Distinguish a currency's current wallet amount from weekly and seasonal cap
+  progress instead of exposing the ambiguous raw `totalEarned` label.
+
 ## [0.7.1] - 2026-08-24
 
 - Polish AI-readable reports with human-friendly class names, concise item-level
