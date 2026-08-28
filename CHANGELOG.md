@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2] - 2026-08-28
+
+- Add selected, bounded exports for the current visible currency list and
+  visible faction standings. Current currencies remain separate from capped
+  currency progress. Reputation reports show readable standing names and
+  within-tier progress; unavailable, truncated and omitted states are explicit.
+
 ## [0.8.1] - 2026-08-28
 
 - Omit blank optional bag-item and gem names returned by an uncached Retail

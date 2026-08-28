@@ -1,5 +1,5 @@
 local namespace = {}
-local exportOptions = { equipment = true, bagItems = true, currentSpellbook = true, talents = true, vault = true, currencyCaps = true, decorInventory = true, questLog = true, professionRecipes = true }
+local exportOptions = { equipment = true, bagItems = true, currentSpellbook = true, talents = true, vault = true, currencyCaps = true, currencies = true, reputations = true, decorInventory = true, questLog = true, professionRecipes = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
 namespace.GetDecorInventory = function() return {
@@ -116,16 +116,27 @@ C_QuestLog = {
     GetTimeAllowed = function(questID) if questID == 9002 then return 3600, 1200 end end,
 }
 C_CurrencyInfo = {
-    GetCurrencyListSize = function() return 2 end,
+    GetCurrencyListSize = function() return 3 end,
     GetCurrencyListInfo = function(index)
         if index == 1 then return { isHeader = true } end
-        return { currencyID = 3284, isHeader = false }
+        if index == 2 then return { currencyID = 3284, isHeader = false } end
+        return { currencyID = 3000, isHeader = false }
     end,
     GetCurrencyInfo = function(currencyID)
         if currencyID == 3284 then
             return { name = "Gilded Crest", quantity = 42, maxQuantity = 90, maxWeeklyQuantity = 30, quantityEarnedThisWeek = 12, totalEarned = 52, canEarnPerWeek = true, useTotalEarnedForMaxQty = true, isAccountWide = false, isAccountTransferable = true }
         end
+        if currencyID == 3000 then return { name = "Traveler's Coin", quantity = 17, iconFileID = 1, isAccountWide = true, isAccountTransferable = false } end
     end,
+}
+C_Reputation = {
+    GetNumFactions = function() return 3 end,
+    GetFactionDataByIndex = function(index)
+        if index == 1 then return { isHeader = true, factionID = 1, name = "Header" } end
+        if index == 2 then return { factionID = 2507, name = "Dornogal", reaction = 5, currentStanding = 6000, currentReactionThreshold = 3000, nextReactionThreshold = 9000, isWatched = true } end
+        return { factionID = 2570, name = "Council of Dornogal", reaction = 8, currentStanding = 2500, currentReactionThreshold = 0, nextReactionThreshold = 2500, isWatched = false }
+    end,
+    IsMajorFaction = function(factionID) return factionID == 2570 end,
 }
 C_SpellBook = {
     GetNumSpellBookSkillLines = function() return 2 end,
@@ -187,6 +198,8 @@ assert(snapshot.format == 3 and snapshot.exportOptions.currencyCaps and snapshot
 assert(snapshot.decorInventory.available and snapshot.decorInventory.truncated == false, "expected complete housing inventory metadata")
 assert(snapshot.decorInventory.packedItems[1][1] == 77 and snapshot.decorInventory.packedItems[1][2] == "Warm Chair", "expected compact housing row")
 assert(snapshot.currencyCaps[1].currencyID == 3284 and snapshot.currencyCaps[1].quantityEarnedThisWeek == 12, "expected capped currency metadata")
+assert(snapshot.currencies.available and #snapshot.currencies.entries == 2 and snapshot.currencies.entries[1].name == "Gilded Crest", "expected all visible current currencies")
+assert(snapshot.reputations.available and #snapshot.reputations.entries == 2 and snapshot.reputations.entries[1].factionID == 2570 and snapshot.reputations.entries[1].isMajorFaction, "expected visible faction standings")
 assert(snapshot.exportOptions.questLog and snapshot.questLog.available and #snapshot.questLog.entries == 2, "expected current quest log")
 assert(snapshot.exportOptions.currentSpellbook and snapshot.currentSpellbook.available and #snapshot.currentSpellbook.spells == 3, "expected current spellbook export")
 assert(snapshot.currentSpellbook.spells[1].name == "Flame Shock" and snapshot.currentSpellbook.spells[2].isPassive, "expected sorted spell identity and passive state")
@@ -254,6 +267,9 @@ assert(aiReport:find("current amount 42", 1, true), "expected current currency b
 assert(aiReport:find("weekly cap progress 12/30", 1, true), "expected weekly currency cap progress")
 assert(aiReport:find("season-cap progress 52/90", 1, true), "expected seasonal currency cap progress instead of ambiguous total-earned labels")
 assert(not aiReport:find("total earned", 1, true), "expected ambiguous currency API labels to be omitted")
+assert(aiReport:find("Traveler's Coin", 1, true) and aiReport:find("current amount 17", 1, true), "expected current-currency identity and wallet amount")
+assert(aiReport:find("Dornogal", 1, true) and aiReport:find("faction ID 2507", 1, true), "expected visible reputation identity")
+assert(aiReport:find("standing Friendly", 1, true) and aiReport:find("standing progress 3000/6000", 1, true), "expected readable within-tier reputation progress")
 assert(aiReport:find("Warm Chair", 1, true) and aiReport:find("record ID 77", 1, true), "expected readable decor record")
 assert(aiReport:find("A Dark Errand", 1, true) and aiReport:find("quest ID 9001", 1, true), "expected readable quest identity")
 assert(aiReport:find("Ironforge Chandelier", 1, true) and aiReport:find("recipe ID 1261659", 1, true), "expected readable learned recipe identity")
@@ -267,7 +283,7 @@ assert(aiReport:find("Omitted, unavailable and unknown data are not evidence", 1
 
 local vaultOnly = {
     equipment = false, bagItems = false, currentSpellbook = false, talents = false, vault = true,
-    currencyCaps = false, decorInventory = false, questLog = false,
+    currencyCaps = false, currencies = false, reputations = false, decorInventory = false, questLog = false,
     professionRecipes = false,
 }
 C_WeeklyRewards = {
@@ -287,11 +303,13 @@ C_WeeklyRewards = nil
 exportOptions.bagItems = false
 exportOptions.currentSpellbook = false
 exportOptions.vault = false
+exportOptions.currencies = false
+exportOptions.reputations = false
 exportOptions.questLog = false
 exportOptions.professionRecipes = false
 local reducedSnapshot = namespace.BuildSnapshot()
-assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.currentSpellbook == nil and reducedSnapshot.vault == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
-assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
+assert(reducedSnapshot.bagEquipment == nil and reducedSnapshot.currentSpellbook == nil and reducedSnapshot.vault == nil and reducedSnapshot.currencies == nil and reducedSnapshot.reputations == nil and reducedSnapshot.questLog == nil and reducedSnapshot.professionRecipes == nil, "expected disabled categories to be omitted")
+assert(reducedSnapshot.exportOptions.bagItems == false and reducedSnapshot.exportOptions.vault == false and reducedSnapshot.exportOptions.currencies == false and reducedSnapshot.exportOptions.reputations == false and reducedSnapshot.exportOptions.questLog == false and reducedSnapshot.exportOptions.professionRecipes == false, "expected omitted categories to be explicit")
 assert(namespace.FormatExportSummary(reducedSnapshot):find("bag items omitted", 1, true), "expected omitted category in chat summary")
 
 local selectedSnapshot = namespace.SelectSnapshot(completeSnapshot, exportOptions)

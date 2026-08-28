@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.8.1"
+ns.VERSION = "0.8.2"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
@@ -15,6 +15,8 @@ local DEFAULT_OPTIONS = {
     talents = true,
     vault = true,
     currencyCaps = true,
+    currencies = true,
+    reputations = true,
     decorInventory = true,
     questLog = true,
     professionRecipes = true,

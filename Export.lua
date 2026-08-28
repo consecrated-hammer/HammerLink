@@ -399,6 +399,77 @@ local function currencyCaps()
     return result
 end
 
+local function currencies()
+    local snapshot = { available = false, capturedAt = time(), entries = {}, truncated = false }
+    if not C_CurrencyInfo or not C_CurrencyInfo.GetCurrencyListSize or not C_CurrencyInfo.GetCurrencyListInfo or not C_CurrencyInfo.GetCurrencyInfo then
+        snapshot.reason = "The Retail currency API is unavailable in this client."
+        return snapshot
+    end
+    local sizeOK, size = pcall(C_CurrencyInfo.GetCurrencyListSize)
+    if not sizeOK or type(size) ~= "number" then
+        snapshot.reason = "The current currency list could not be read."
+        return snapshot
+    end
+    snapshot.available = true
+    local seen, limit = {}, math.min(size, 256)
+    snapshot.truncated = size > limit
+    for index = 1, limit do
+        local listOK, listed = pcall(C_CurrencyInfo.GetCurrencyListInfo, index)
+        local currencyID = listOK and listed and listed.currencyID
+        if type(currencyID) == "number" and not listed.isHeader and not seen[currencyID] then
+            seen[currencyID] = true
+            local infoOK, info = pcall(C_CurrencyInfo.GetCurrencyInfo, currencyID)
+            if infoOK and type(info) == "table" and type(info.name) == "string" and info.name ~= "" then
+                snapshot.entries[#snapshot.entries + 1] = {
+                    currencyID = currencyID, name = info.name, quantity = info.quantity,
+                    iconFileID = info.iconFileID, quality = info.quality,
+                    isAccountWide = info.isAccountWide, isAccountTransferable = info.isAccountTransferable,
+                }
+            end
+        end
+    end
+    table.sort(snapshot.entries, function(a, b) return a.name < b.name end)
+    return snapshot
+end
+
+local function reputations()
+    local snapshot = { available = false, capturedAt = time(), entries = {}, truncated = false }
+    if not C_Reputation or not C_Reputation.GetNumFactions or not C_Reputation.GetFactionDataByIndex then
+        snapshot.reason = "The Retail reputation API is unavailable in this client."
+        return snapshot
+    end
+    local sizeOK, size = pcall(C_Reputation.GetNumFactions)
+    if not sizeOK or type(size) ~= "number" then
+        snapshot.reason = "The current reputation list could not be read."
+        return snapshot
+    end
+    snapshot.available = true
+    local seen, limit = {}, math.min(size, 256)
+    snapshot.truncated = size > limit
+    for index = 1, limit do
+        local infoOK, info = pcall(C_Reputation.GetFactionDataByIndex, index)
+        local factionID = infoOK and info and info.factionID
+        if type(factionID) == "number" and not info.isHeader and not seen[factionID]
+            and type(info.name) == "string" and info.name ~= "" then
+            seen[factionID] = true
+            local entry = {
+                factionID = factionID, name = info.name, reaction = info.reaction,
+                currentStanding = info.currentStanding,
+                currentReactionThreshold = info.currentReactionThreshold,
+                nextReactionThreshold = info.nextReactionThreshold,
+                isWatched = info.isWatched,
+            }
+            if C_Reputation.IsMajorFaction then
+                local majorOK, isMajor = pcall(C_Reputation.IsMajorFaction, factionID)
+                if majorOK then entry.isMajorFaction = isMajor end
+            end
+            snapshot.entries[#snapshot.entries + 1] = entry
+        end
+    end
+    table.sort(snapshot.entries, function(a, b) return a.name < b.name end)
+    return snapshot
+end
+
 local function questLog()
     local snapshot = { available = false, capturedAt = time(), entries = {}, truncated = false }
     if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries or not C_QuestLog.GetInfo then
@@ -492,20 +563,20 @@ local function questLog()
 end
 
 local CATEGORY_ORDER = {
-    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps",
+    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
     "decorInventory", "questLog", "professionRecipes",
 }
 
 local CATEGORY_FIELDS = {
     equipment = "equipment", bagItems = "bagEquipment", currentSpellbook = "currentSpellbook", talents = "talents",
-    vault = "vault", currencyCaps = "currencyCaps",
+    vault = "vault", currencyCaps = "currencyCaps", currencies = "currencies", reputations = "reputations",
     decorInventory = "decorInventory", questLog = "questLog",
     professionRecipes = "professionRecipes",
 }
 
 local CATEGORY_TITLES = {
     equipment = "Equipped gear", bagItems = "Bag items", currentSpellbook = "Current spellbook", talents = "Active talents",
-    vault = "Great Vault", currencyCaps = "Currency caps",
+    vault = "Great Vault", currencyCaps = "Currency caps", currencies = "Current currencies", reputations = "Current reputations",
     decorInventory = "Housing decor inventory", questLog = "Current quest log",
     professionRecipes = "Learned recipes and techniques",
 }
@@ -531,6 +602,8 @@ function ns.BuildSnapshot(options)
     if selected.talents then snapshot.talents = { importString = talentExport() } end
     if selected.vault then snapshot.vault = vault() end
     if selected.currencyCaps then snapshot.currencyCaps = currencyCaps() end
+    if selected.currencies then snapshot.currencies = currencies() end
+    if selected.reputations then snapshot.reputations = reputations() end
     if selected.decorInventory then snapshot.decorInventory = ns.GetDecorInventory() end
     if selected.questLog then snapshot.questLog = questLog() end
     if selected.professionRecipes then snapshot.professionRecipes = ns.GetProfessionRecipes() end
@@ -587,6 +660,10 @@ function ns.FormatExportSummary(snapshot)
     add("talents", options.talents, snapshot.talents and snapshot.talents.importString and 1 or 0)
     add("Vault activities", options.vault, snapshot.vault and #(snapshot.vault.activities or {}) or 0)
     add("currency caps", options.currencyCaps, #(snapshot.currencyCaps or {}))
+    local currentCurrencies = snapshot.currencies
+    add("currencies", options.currencies, currentCurrencies and #(currentCurrencies.entries or {}) or 0, currentCurrencies and currentCurrencies.available == false)
+    local currentReputations = snapshot.reputations
+    add("reputations", options.reputations, currentReputations and #(currentReputations.entries or {}) or 0, currentReputations and currentReputations.available == false)
     local decor = snapshot.decorInventory
     add("decor", options.decorInventory, decor and #(decor.packedItems or decor.items or {}) or 0, decor and decor.available == false)
     local quests = snapshot.questLog
@@ -679,6 +756,8 @@ local function categoryCount(snapshot, category)
     if category == "talents" then return snapshot.talents and snapshot.talents.importString and 1 or 0 end
     if category == "vault" then return snapshot.vault and #(snapshot.vault.activities or {}) or 0 end
     if category == "currencyCaps" then return #(snapshot.currencyCaps or {}) end
+    if category == "currencies" then return snapshot.currencies and #(snapshot.currencies.entries or {}) or 0 end
+    if category == "reputations" then return snapshot.reputations and #(snapshot.reputations.entries or {}) or 0 end
     if category == "decorInventory" then
         local decor = snapshot.decorInventory
         return decor and #(decor.packedItems or decor.items or {}) or 0
@@ -696,7 +775,7 @@ local function categoryUnavailable(snapshot, category)
         return not (value and (value.currentPeriod ~= nil or value.hasAvailableRewards ~= nil
             or value.hasGeneratedRewards ~= nil or value.dungeonRuns or #(value.activities or {}) > 0))
     end
-    if category == "currentSpellbook" or category == "decorInventory" or category == "questLog" or category == "professionRecipes" then
+    if category == "currentSpellbook" or category == "currencies" or category == "reputations" or category == "decorInventory" or category == "questLog" or category == "professionRecipes" then
         return value and value.available == false
     end
     return false
@@ -707,6 +786,8 @@ local function unavailableReason(snapshot, category)
     if value and value.reason then return plain(value.reason) end
     if category == "talents" then return "The active talent import string was not available from the client." end
     if category == "currentSpellbook" then return "The current character spellbook was not available from the client." end
+    if category == "currencies" then return "The current currency list was not available from the client." end
+    if category == "reputations" then return "The current reputation list was not available from the client." end
     if category == "vault" then return "Great Vault data was not available from the client." end
     return "This category was unavailable when the report was captured."
 end
@@ -714,6 +795,15 @@ end
 local function boolText(value)
     if value == nil then return nil end
     return value and "yes" or "no"
+end
+
+local REACTION_NAMES = {
+    [1] = "Hated", [2] = "Hostile", [3] = "Unfriendly", [4] = "Neutral",
+    [5] = "Friendly", [6] = "Honored", [7] = "Revered", [8] = "Exalted",
+}
+
+local function reactionText(reaction)
+    return REACTION_NAMES[reaction] or (reaction and ("reaction " .. tostring(reaction)) or nil)
 end
 
 local function capturedTime(value)
@@ -830,6 +920,25 @@ local function reportSection(snapshot, category)
             addValue(parts, "account-wide", boolText(currency.isAccountWide))
             addValue(parts, "transferable", boolText(currency.isAccountTransferable))
             append(lines, "- " .. plain(currency.name or "Unknown currency") .. " (" .. table.concat(parts, "; ") .. ")")
+        end
+    elseif category == "currencies" then
+        for _, currency in ipairs((snapshot.currencies or {}).entries or {}) do
+            local parts = { "currency ID " .. tostring(currency.currencyID or "unknown"), "current amount " .. tostring(currency.quantity or 0) }
+            addValue(parts, "account-wide", boolText(currency.isAccountWide))
+            addValue(parts, "transferable", boolText(currency.isAccountTransferable))
+            append(lines, "- " .. plain(currency.name or "Unknown currency") .. " (" .. table.concat(parts, "; ") .. ")")
+        end
+    elseif category == "reputations" then
+        for _, reputation in ipairs((snapshot.reputations or {}).entries or {}) do
+            local parts = { "faction ID " .. tostring(reputation.factionID or "unknown") }
+            addValue(parts, "standing", reactionText(reputation.reaction))
+            if reputation.currentStanding ~= nil and reputation.currentReactionThreshold ~= nil and reputation.nextReactionThreshold ~= nil then
+                addValue(parts, "standing progress", tostring(reputation.currentStanding - reputation.currentReactionThreshold)
+                    .. "/" .. tostring(reputation.nextReactionThreshold - reputation.currentReactionThreshold))
+            end
+            addValue(parts, "major faction", boolText(reputation.isMajorFaction))
+            addValue(parts, "watched", boolText(reputation.isWatched))
+            append(lines, "- " .. plain(reputation.name or "Unknown faction") .. " (" .. table.concat(parts, "; ") .. ")")
         end
     elseif category == "decorInventory" then
         local decor = snapshot.decorInventory or {}

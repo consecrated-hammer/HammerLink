@@ -30,7 +30,7 @@ C_TradeSkillUI = {
 }
 
 assert(loadfile("Core.lua"))("HammerLink", namespace)
-assert(namespace.VERSION == "0.8.1", "expected the visible addon version")
+assert(namespace.VERSION == "0.8.2", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
 assert(namespace.GetExportFormat() == "ai" and namespace.db.exportFormat == "ai", "expected AI-readable exports to be the persisted default")

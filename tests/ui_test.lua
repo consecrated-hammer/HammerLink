@@ -2,18 +2,18 @@ local namespace = {
     VERSION = "0.8.0-test",
     db = { options = {
         equipment = true, bagItems = true, currentSpellbook = true, talents = true, vault = true,
-        currencyCaps = true, decorInventory = true, questLog = true,
+        currencyCaps = true, currencies = true, reputations = true, decorInventory = true, questLog = true,
         professionRecipes = true,
     } },
 }
 
 local categories = {
-    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps",
+    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
     "decorInventory", "questLog", "professionRecipes",
 }
 local counts = {
     equipment = 15, bagItems = 118, currentSpellbook = 96, talents = 1, vault = 8,
-    currencyCaps = 6, decorInventory = 666, questLog = 24,
+    currencyCaps = 6, currencies = 14, reputations = 42, decorInventory = 666, questLog = 24,
     professionRecipes = 142,
 }
 local frames = {}
@@ -154,7 +154,7 @@ assert(chooser.formatDropdown.Text.justifyH == "LEFT", "expected the selected dr
 assert(chooser.rows.bagItems.count.text:find("L118 records", 1, true), "expected locale-aware per-category counts")
 assert(chooser.rows.talents.count.text:find("L1 record", 1, true), "expected singular per-category count wording")
 assert(numberFormatCalls > 0, "expected Blizzard's number formatter")
-assert(chooser.summary.text:find("records across 9 categories", 1, true), "expected live selected-record total")
+assert(chooser.summary.text:find("records across 11 categories", 1, true), "expected live selected-record total")
 assert(chooser.summary.text:find("about ", 1, true) and chooser.summary.text:find("KB", 1, true), "expected an approximate report size in KB")
 assert(not chooser.summary.text:find("characters", 1, true), "expected the raw character estimate to be hidden")
 assert(chooser.categoryScroll and chooser.categoryScroll.scrollChild == chooser.categoryContent, "expected a native scroll area for export categories")
@@ -199,7 +199,7 @@ local bagCheck = chooser.rows.bagItems.check
 bagCheck:SetChecked(false)
 bagCheck.scripts.OnClick(bagCheck)
 assert(namespace.db.options.bagItems == false, "expected category selection to persist")
-assert(chooser.summary.text:find("records across 8 categories", 1, true), "expected total to react to category changes")
+assert(chooser.summary.text:find("records across 10 categories", 1, true), "expected total to react to category changes")
 
 local generate
 for _, frame in ipairs(frames) do

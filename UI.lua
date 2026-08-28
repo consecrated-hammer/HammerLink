@@ -101,6 +101,8 @@ local exportCategories = {
     { key = "talents", title = "Active talents", icon = "Interface\\Icons\\INV_Misc_Book_11", detail = "The active talent import string when the client exposes it." },
     { key = "vault", title = "Great Vault", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Exact current in-game Vault progress and generated rewards." },
     { key = "currencyCaps", title = "Currency caps", icon = "Interface\\Icons\\INV_Misc_Coin_01", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
+    { key = "currencies", title = "Current currencies", icon = "Interface\\Icons\\INV_Misc_Coin_02", detail = "Current wallet entries exposed in Retail's currency list. This is a snapshot, not a transaction history." },
+    { key = "reputations", title = "Current reputations", icon = "Interface\\Icons\\INV_Misc_Note_06", detail = "Visible Retail faction standings and progress. Collapsed headers and unavailable client fields are not inferred." },
     { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05", detail = "Owned Housing Catalog decor, including stored and placed counts." },
     { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01", detail = "Active quests, objective progress, quest types and available waypoints." },
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
