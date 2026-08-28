@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.8.0"
+ns.VERSION = "0.8.1"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192

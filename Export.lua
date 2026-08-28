@@ -83,6 +83,10 @@ local function addIfPresent(target, key, value)
     if value ~= nil then target[key] = value end
 end
 
+local function addNonEmptyString(target, key, value)
+    if type(value) == "string" and value ~= "" then target[key] = value end
+end
+
 local function itemDetails(link, containerInfo)
     local itemID, itemType, itemSubType, inventoryType, iconFileID, classID, subclassID = C_Item.GetItemInfoInstant(link)
     local value = {
@@ -100,7 +104,7 @@ local function itemDetails(link, containerInfo)
     if value.itemType == "" then value.itemType = nil end
     if value.itemSubType == "" then value.itemSubType = nil end
     if value.inventoryType == "" then value.inventoryType = nil end
-    addIfPresent(value, "name", containerInfo.itemName)
+    addNonEmptyString(value, "name", containerInfo.itemName)
     addIfPresent(value, "quality", containerInfo.quality)
     local canEquip = value.inventoryType ~= nil
 
@@ -108,7 +112,7 @@ local function itemDetails(link, containerInfo)
         local ok, name, _, quality, baseItemLevel, requiredLevel, _, _, _, _, _, sellPrice,
             cachedClassID, cachedSubclassID, bindType, expansionID, setID, isCraftingReagent = pcall(C_Item.GetItemInfo, link)
         if ok then
-            addIfPresent(value, "name", name)
+            addNonEmptyString(value, "name", name)
             addIfPresent(value, "quality", quality)
             addIfPresent(value, "baseItemLevel", baseItemLevel)
             addIfPresent(value, "requiredLevel", requiredLevel)
@@ -149,7 +153,9 @@ local function itemDetails(link, containerInfo)
             local ok, gemName, gemLink = pcall(C_Item.GetItemGem, link, socket)
             if ok and gemLink then
                 local gemID = C_Item.GetItemInfoInstant(gemLink)
-                gems[#gems + 1] = { socket = socket, itemID = gemID, name = gemName, link = gemLink }
+                local gem = { socket = socket, itemID = gemID, link = gemLink }
+                addNonEmptyString(gem, "name", gemName)
+                gems[#gems + 1] = gem
             end
         end
         if #gems > 0 then value.gems = gems end

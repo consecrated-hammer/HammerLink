@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1] - 2026-08-28
+
+- Omit blank optional bag-item and gem names returned by an uncached Retail
+  client item query. The complete item link and ID remain available for a safe
+  fallback name, so one incomplete display field can no longer reject a full
+  character export.
+
 ## [0.8.0] - 2026-08-27
 
 - Replace the format buttons with a native dropdown. AI-readable reports are

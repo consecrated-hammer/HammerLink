@@ -170,6 +170,17 @@ assert(potion.stackCount == 3 and potion.inventoryType == nil, "expected item me
 assert(potion.isCraftingReagent == nil, "expected non-boolean reagent flag to be omitted")
 assert(potion.sellPrice == 12 and potion.classID == 0 and potion.subclassID == 1, "expected consumable metadata in the correct return positions")
 
+bagItems[0][2].itemName = ""
+local originalGetItemInfo = C_Item.GetItemInfo
+C_Item.GetItemInfo = function(link)
+    if link:find("2002", 1, true) then return "", link end
+    return originalGetItemInfo(link)
+end
+local blankNameSnapshot = namespace.BuildSnapshot()
+assert(blankNameSnapshot.bagEquipment[2].name == nil, "expected a blank optional bag name to be omitted")
+bagItems[0][2].itemName = "Potion"
+C_Item.GetItemInfo = originalGetItemInfo
+
 local reagentBagWeapon = snapshot.bagEquipment[3]
 assert(reagentBagWeapon.bag == 5 and reagentBagWeapon.itemID == 2003, "expected reagent bag scan")
 assert(snapshot.format == 3 and snapshot.exportOptions.currencyCaps and snapshot.exportOptions.decorInventory, "expected enabled export options metadata")
