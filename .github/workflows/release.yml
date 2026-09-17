@@ -69,3 +69,14 @@ jobs:
         env:
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      - name: Prepare Forever package
+        run: |
+          rm HammerLink.toc
+          mv HammerLink_Camelot.toc HammerLink.toc
+      - name: Package and release Forever build
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -n "{package}-{version}-Forever"
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}

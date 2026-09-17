@@ -12,6 +12,10 @@ jobs:
           find . -name '*.lua' -not -path './.git/*' -not -path './tests/*' -printf '%P\n' | sort > /tmp/on_disk
           diff -u /tmp/in_toc /tmp/on_disk
       - run: |
+          awk '!/^[[:space:]]*(#|$)/ { gsub(/\\/, "/"); if ($0 ~ /\.lua$/) print }' HammerLink_Camelot.toc | sort > /tmp/in_classic_toc
+          find Libs Core.lua Export.lua UI.lua UI -name '*.lua' -printf '%p\n' | sort > /tmp/on_classic_disk
+          diff -u /tmp/in_classic_toc /tmp/on_classic_disk
+      - run: |
           lua tests/export_test.lua
           lua tests/core_test.lua
           lua tests/ui_test.lua

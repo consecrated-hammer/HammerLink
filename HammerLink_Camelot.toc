@@ -1,0 +1,25 @@
+## Interface: 16001
+## Title: HammerLink (Camelot Retail-Compatibility Preview)
+## Notes: Provisional Retail-style character exporter for Camelot.
+## Author: consecrated-hammer
+## Version: 0.8.3
+## X-ReleaseDate: 2026-09-18
+## Category-enUS: Data Export
+## SavedVariables: HammerLinkDB
+## IconTexture: Interface\AddOns\HammerLink\Textures\HammerLinkMain
+## X-Website: https://github.com/consecrated-hammer/HammerLink
+## X-CurseForge: https://www.curseforge.com/wow/addons/hammerlink
+## X-Curse-Project-ID: 1656375
+## X-License: GPL-3.0
+## X-HammerLink-Target: Camelot (provisional Retail-style compatibility)
+## X-ProvisionalInterface: 16001 is a provisional Forever beta target; verify it in the client.
+
+# Camelot is now assumed to inherit Retail-style addon restrictions. Use the
+# normal exporter rather than fabricating a parallel Classic-only data contract.
+# Each client API remains runtime-checked; no Forever HL1 upload is authorized.
+Libs\LibStub\LibStub.lua
+Libs\LibDeflate\LibDeflate.lua
+Core.lua
+Export.lua
+UI.lua
+UI\Minimap.lua

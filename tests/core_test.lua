@@ -62,6 +62,11 @@ assert(about == 1, "expected about command to open About")
 assert(options == 1, "expected options command to open export settings")
 
 SlashCmdList.HAMMERLINK("help")
-assert(#messages >= 3 and messages[#messages]:find("options", 1, true), "expected help to document options")
+local documentedOptions, documentedLoadMessage = false, false
+for _, message in ipairs(messages) do
+    documentedOptions = documentedOptions or message:find("options", 1, true) ~= nil
+    documentedLoadMessage = documentedLoadMessage or message:find("loadmsg on|off", 1, true) ~= nil
+end
+assert(documentedOptions and documentedLoadMessage, "expected help to document options and the load-message control")
 
 print("HammerLink core tests passed")

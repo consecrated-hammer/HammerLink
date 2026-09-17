@@ -5,7 +5,6 @@ local addonName, ns = ...
 ns.Minimap = {}
 local Minimap_ = ns.Minimap
 local ICON = "Interface\\AddOns\\HammerLink\\Textures\\HammerLinkClean"
-local RADIUS = 80
 
 function Minimap_:Create()
     if self.button then return self.button end
@@ -28,10 +27,19 @@ function Minimap_:Create()
     border:SetSize(54, 54)
     border:SetPoint("TOPLEFT")
 
+    local function orbitRadius()
+        local width = Minimap:GetWidth() or 0
+        local height = Minimap:GetHeight() or 0
+        local diameter = math.min(width, height)
+        if diameter <= 0 then return 80 end
+        -- Match Salve's LibDBIcon-style 5px orbit beyond the minimap edge.
+        return diameter / 2 + button:GetWidth() / 2 - 10
+    end
+
     local function place(angle)
         local radians = math.rad(angle or 225)
         button:ClearAllPoints()
-        button:SetPoint("CENTER", Minimap, "CENTER", math.cos(radians) * RADIUS, math.sin(radians) * RADIUS)
+        button:SetPoint("CENTER", Minimap, "CENTER", math.cos(radians) * orbitRadius(), math.sin(radians) * orbitRadius())
     end
     local atan2 = math.atan2 or math.atan
     local function follow()
@@ -66,6 +74,10 @@ function Minimap_:Create()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
     place(ns.db.minimapAngle)
+    Minimap:HookScript("OnSizeChanged", function()
+        place(ns.db.minimapAngle or 225)
+    end)
     self.button = button
+    self.place = place
     return button
 end

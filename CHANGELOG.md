@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.3] - 2026-09-18
+
+- Add provisional WoW Forever support, including client provenance in exports.
+- Omit Forever-unsupported systems and unavailable talent data from exports.
+- Add a default-on configurable startup message.
+
 ## [0.8.2] - 2026-08-28
 
 - Add selected, bounded exports for the current visible currency list and

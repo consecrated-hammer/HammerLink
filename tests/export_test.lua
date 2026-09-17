@@ -2,6 +2,15 @@ local namespace = {}
 local exportOptions = { equipment = true, bagItems = true, currentSpellbook = true, talents = true, vault = true, currencyCaps = true, currencies = true, reputations = true, decorInventory = true, questLog = true, professionRecipes = true }
 namespace.GetExportOptions = function() return exportOptions end
 namespace.IsExportEnabled = function(category) return exportOptions[category] ~= false end
+namespace.IsExportSupported = function(category)
+    local _, _, _, tocVersion = GetBuildInfo()
+    return tocVersion ~= 16001 or (category ~= "vault" and category ~= "decorInventory"
+        and category ~= "currencyCaps" and category ~= "currencies")
+end
+namespace.IsForeverClient = function()
+    local _, _, _, tocVersion = GetBuildInfo()
+    return tocVersion == 16001
+end
 namespace.GetDecorInventory = function() return {
     available = true, truncated = false,
     packedItems = { { 77, "Warm Chair", 228000, 134400, 2, 1, 0, 2, 3 } },
@@ -46,6 +55,8 @@ function UnitFullName() return "Bluehoof", "Dath'Remar" end
 function UnitClass() return "Paladin", "PALADIN" end
 function GetSpecialization() return nil end
 function GetAverageItemLevel() return 700, 695, 700 end
+WOW_PROJECT_ID = 1
+function GetBuildInfo() return "12.1.0", "69893", "September 18 2026", 120100 end
 function GetCurrentRegion() return 1 end
 function UnitLevel() return 80 end
 function time() return 1787200000 end
@@ -159,6 +170,35 @@ end
 
 assert(loadfile("Export.lua"))("HammerLink", namespace)
 local snapshot = namespace.BuildSnapshot()
+assert(snapshot.client.projectID == 1 and snapshot.client.tocVersion == 120100,
+    "expected client project and TOC provenance")
+assert(snapshot.client.version == "12.1.0" and snapshot.client.build == "69893",
+    "expected client version and build provenance")
+
+local savedGetSpecialization = GetSpecialization
+local savedGetAverageItemLevel = GetAverageItemLevel
+local savedGetBuildInfo = GetBuildInfo
+GetSpecialization = nil
+GetAverageItemLevel = nil
+GetBuildInfo = function() return "1.60.1", "69893", "September 18 2026", 16001 end
+local foreverSnapshot = namespace.BuildSnapshot()
+assert(foreverSnapshot.character.specID == nil, "expected missing Forever specialization API to be omitted")
+assert(foreverSnapshot.character.equippedItemLevel == nil and foreverSnapshot.character.overallItemLevel == nil,
+    "expected missing Forever item-level API to be omitted")
+assert(foreverSnapshot.client.tocVersion == 16001, "expected Forever client provenance")
+assert(foreverSnapshot.vault == nil and foreverSnapshot.decorInventory == nil
+    and foreverSnapshot.currencyCaps == nil and foreverSnapshot.currencies == nil,
+    "expected Forever-only systems to be omitted")
+assert(foreverSnapshot.talents == nil, "expected unavailable Forever talents to be omitted instead of encoded as an empty array")
+local foreverReport = namespace.BuildAIReport(foreverSnapshot)
+assert(not foreverReport:find("Great Vault", 1, true) and not foreverReport:find("Housing decor", 1, true)
+    and not foreverReport:find("Currency caps", 1, true) and not foreverReport:find("Current currencies", 1, true),
+    "expected unsupported Forever categories to be absent from the report")
+assert(not foreverReport:find("Equipped item level", 1, true) and not foreverReport:find("Overall item level", 1, true),
+    "expected placeholder Forever item levels to be absent from the report")
+GetSpecialization = savedGetSpecialization
+GetAverageItemLevel = savedGetAverageItemLevel
+GetBuildInfo = savedGetBuildInfo
 
 assert(#snapshot.equipment == 1, "expected equipped item export to remain intact")
 assert(#snapshot.bagEquipment == 3, "expected every occupied bag slot")
@@ -276,7 +316,7 @@ assert(aiReport:find("Ironforge Chandelier", 1, true) and aiReport:find("recipe 
 assert(aiReport:find("Current spellbook: included — 3 records", 1, true), "expected current spellbook in report scope")
 assert(aiReport:find("Wind Shear", 1, true) and aiReport:find("spell ID 57994", 1, true), "expected flyout spell identity in readable report")
 assert(aiReport:find("Improved Stormstrike", 1, true) and aiReport:find("passive", 1, true), "expected passive spell state in readable report")
-assert(aiReport:find("marked off-spec abilities", 1, true), "expected accurate spellbook scope wording")
+assert(aiReport:find("abilities beyond those currently usable", 1, true), "expected client-neutral spellbook scope wording")
 assert(not aiReport:find("source spellbook", 1, true) and aiReport:find("flyout", 1, true), "expected only exceptional flyout provenance")
 assert(aiReport:find("Cached positive observations", 1, true) and aiReport:find("Missing entries remain unknown", 1, true), "expected permanent profession completeness guidance")
 assert(aiReport:find("Omitted, unavailable and unknown data are not evidence", 1, true), "expected conservative data-state guidance")

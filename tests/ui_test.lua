@@ -6,6 +6,8 @@ local namespace = {
         professionRecipes = true,
     } },
 }
+namespace.IsExportSupported = function() return true end
+namespace.IsForeverClient = function() return false end
 
 local categories = {
     "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",

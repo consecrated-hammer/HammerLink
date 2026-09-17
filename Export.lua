@@ -48,12 +48,32 @@ local EQUIPMENT_SLOTS = {
     { "MAIN_HAND", INVSLOT_MAINHAND }, { "OFF_HAND", INVSLOT_OFFHAND },
 }
 
+local function clientProvenance()
+    local client = {}
+    if type(WOW_PROJECT_ID) == "number" then client.projectID = WOW_PROJECT_ID end
+    if GetBuildInfo then
+        local ok, version, build, _, tocVersion = pcall(GetBuildInfo)
+        if ok then
+            if type(version) == "string" and version ~= "" then client.version = version end
+            if type(build) == "string" and build ~= "" then client.build = build end
+            if type(tocVersion) == "number" then client.tocVersion = tocVersion end
+        end
+    end
+    return next(client) and client or nil
+end
+
 local function character()
     local name, realm = UnitFullName("player")
     local _, class = UnitClass("player")
-    local specIndex = GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo(specIndex) or nil
-    local overall, equipped = GetAverageItemLevel()
+    -- Forever currently has no Retail specialization or item-level globals.
+    -- Character identity remains useful, so omit only those unavailable fields
+    -- instead of making the entire exporter unusable on that client.
+    local specIndex = GetSpecialization and GetSpecialization() or nil
+    local specID = specIndex and GetSpecializationInfo and GetSpecializationInfo(specIndex) or nil
+    local overall, equipped
+    -- Forever exposes this Retail-named API but currently returns placeholder
+    -- values for low-level characters. Do not present them as actual gear data.
+    if not ns.IsForeverClient() and GetAverageItemLevel then overall, equipped = GetAverageItemLevel() end
     return {
         name = name,
         realm = realm or GetRealmName(),
@@ -217,7 +237,7 @@ local function bagEquipment()
 end
 
 local function talentExport()
-    local specIndex = GetSpecialization()
+    local specIndex = GetSpecialization and GetSpecialization() or nil
     if not specIndex or not C_ClassTalents or not C_Traits then return nil end
     local configID = C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetActiveConfigID()
     if not configID then return nil end
@@ -584,7 +604,9 @@ local CATEGORY_TITLES = {
 local function selectedOptions(options)
     local selected = {}
     options = options or ns.GetExportOptions()
-    for _, category in ipairs(CATEGORY_ORDER) do selected[category] = options[category] ~= false end
+    for _, category in ipairs(CATEGORY_ORDER) do
+        selected[category] = ns.IsExportSupported(category) and options[category] ~= false
+    end
     return selected
 end
 
@@ -596,10 +618,18 @@ function ns.BuildSnapshot(options)
         character = character(),
         exportOptions = selected,
     }
+    local client = clientProvenance()
+    if client then snapshot.client = client end
     if selected.equipment then snapshot.equipment = equipment() end
     if selected.bagItems then snapshot.bagEquipment = bagEquipment() end
     if selected.currentSpellbook then snapshot.currentSpellbook = currentSpellbook() end
-    if selected.talents then snapshot.talents = { importString = talentExport() } end
+    if selected.talents then
+        local importString = talentExport()
+        -- Lua cannot distinguish an empty object from an empty array while
+        -- encoding. Omit unavailable talent data so the HL1 JSON remains
+        -- schema-valid rather than serialising talents as [].
+        if importString then snapshot.talents = { importString = importString } end
+    end
     if selected.vault then snapshot.vault = vault() end
     if selected.currencyCaps then snapshot.currencyCaps = currencyCaps() end
     if selected.currencies then snapshot.currencies = currencies() end
@@ -624,6 +654,7 @@ function ns.SelectSnapshot(snapshot, options)
         character = snapshot.character,
         exportOptions = selected,
     }
+    if snapshot.client then result.client = snapshot.client end
     for _, category in ipairs(CATEGORY_ORDER) do
         if selected[category] then
             local field = CATEGORY_FIELDS[category]
@@ -854,7 +885,7 @@ local function reportSection(snapshot, category)
         end
     elseif category == "currentSpellbook" then
         local spellbook = snapshot.currentSpellbook or {}
-        append(lines, "_Scope: entries currently exposed in this character's spellbook. The client can include marked off-spec abilities; hidden and inactive-specialisation coverage may be incomplete._")
+        append(lines, "_Scope: entries currently exposed in this character's spellbook. The client can expose abilities beyond those currently usable; hidden or unavailable entries may be absent._")
         append(lines, "")
         if spellbook.truncated then append(lines, "- **Truncated:** yes") end
         for _, spell in ipairs(spellbook.spells or {}) do
@@ -1042,22 +1073,28 @@ function ns.BuildAIReport(snapshot)
     append(lines, "- Class: " .. classText(characterData.class))
     append(lines, "- Level: " .. tostring(characterData.level or "unknown"))
     append(lines, "- Specialisation: " .. specialisationText(characterData.specID))
-    append(lines, "- Equipped item level: " .. decimalText(characterData.equippedItemLevel))
-    append(lines, "- Overall item level: " .. decimalText(characterData.overallItemLevel))
+    if characterData.equippedItemLevel ~= nil then
+        append(lines, "- Equipped item level: " .. decimalText(characterData.equippedItemLevel))
+    end
+    if characterData.overallItemLevel ~= nil then
+        append(lines, "- Overall item level: " .. decimalText(characterData.overallItemLevel))
+    end
     append(lines, "")
     append(lines, "## Export scope")
     append(lines, "")
     for _, category in ipairs(CATEGORY_ORDER) do
-        local info = ns.GetExportCategoryInfo(snapshot, category, false)
-        local state
-        if not info.enabled then state = "omitted by export settings"
-        elseif info.unavailable then state = "unavailable or unknown"
-        else state = "included — " .. recordCountText(info.count) end
-        if info.truncated then state = state .. "; truncated" end
-        append(lines, "- " .. info.title .. ": " .. state)
+        if ns.IsExportSupported(category) then
+            local info = ns.GetExportCategoryInfo(snapshot, category, false)
+            local state
+            if not info.enabled then state = "omitted by export settings"
+            elseif info.unavailable then state = "unavailable or unknown"
+            else state = "included — " .. recordCountText(info.count) end
+            if info.truncated then state = state .. "; truncated" end
+            append(lines, "- " .. info.title .. ": " .. state)
+        end
     end
     for _, category in ipairs(CATEGORY_ORDER) do
-        if snapshot.exportOptions[category] ~= false then
+        if ns.IsExportSupported(category) and snapshot.exportOptions[category] ~= false then
             append(lines, "")
             append(lines, reportSection(snapshot, category))
         end

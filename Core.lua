@@ -22,12 +22,28 @@ local DEFAULT_OPTIONS = {
     professionRecipes = true,
 }
 
+function ns.IsForeverClient()
+    local target = ns.GetMetadata and ns.GetMetadata("X-HammerLink-Target")
+    if type(target) == "string" and target:find("Camelot", 1, true) then return true end
+    if not GetBuildInfo then return false end
+    local ok, _, _, _, tocVersion = pcall(GetBuildInfo)
+    return ok and tocVersion == 16001
+end
+
+function ns.IsExportSupported(category)
+    -- Forever has neither Housing, the Great Vault, nor confirmed support for the Retail wallet APIs.
+    -- Omit those systems
+    -- entirely rather than showing misleading unavailable export choices.
+    return not (ns.IsForeverClient() and (category == "vault" or category == "decorInventory"
+        or category == "currencyCaps" or category == "currencies"))
+end
+
 function ns.GetExportOptions()
     return ns.db and ns.db.options or DEFAULT_OPTIONS
 end
 
 function ns.IsExportEnabled(category)
-    return ns.GetExportOptions()[category] ~= false
+    return ns.IsExportSupported(category) and ns.GetExportOptions()[category] ~= false
 end
 
 function ns.ResetExportOptions()
@@ -295,6 +311,10 @@ function ns.QueueProfessionRecipeCapture()
 end
 
 function ns.GetMetadata(key)
+    if C_AddOns and C_AddOns.GetAddOnMetadata then
+        local value = C_AddOns.GetAddOnMetadata(addonName, key)
+        if value ~= nil then return value end
+    end
     return GetAddOnMetadata and GetAddOnMetadata(addonName, key)
 end
 
@@ -303,18 +323,25 @@ function ns.Print(message)
 end
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("HOUSING_STORAGE_UPDATED")
-frame:RegisterEvent("HOUSING_DECOR_PLACE_SUCCESS")
-frame:RegisterEvent("HOUSING_DECOR_REMOVED")
-frame:RegisterEvent("TRADE_SKILL_SHOW")
-frame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
+-- Camelot shares Mainline's UI architecture but may not include every Retail
+-- game system. Optional-system events must not stop the exporter from loading
+-- if (for example) Housing is absent from that game type.
+local function registerEventIfAvailable(event)
+    return pcall(frame.RegisterEvent, frame, event)
+end
+for _, event in ipairs({
+    "ADDON_LOADED", "PLAYER_LOGIN",
+    "HOUSING_STORAGE_UPDATED", "HOUSING_DECOR_PLACE_SUCCESS", "HOUSING_DECOR_REMOVED",
+    "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE",
+}) do
+    registerEventIfAvailable(event)
+end
 frame:SetScript("OnEvent", function(_, event, loadedName)
     if event == "ADDON_LOADED" then
         if loadedName ~= addonName then return end
         HammerLinkDB = HammerLinkDB or { schemaVersion = 2, minimapAngle = 225, options = {} }
         HammerLinkDB.minimapAngle = HammerLinkDB.minimapAngle or 225
+        if HammerLinkDB.showStartupMessage == nil then HammerLinkDB.showStartupMessage = true end
         ns.db = HammerLinkDB
         ns.db.schemaVersion = 2
         ns.db.options = ns.db.options or {}
@@ -324,9 +351,12 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         for category, enabled in pairs(DEFAULT_OPTIONS) do
             if ns.db.options[category] == nil then ns.db.options[category] = enabled end
         end
+        if HammerLinkDB.showStartupMessage then
+            ns.Print("loaded — type |cffffd100/hammerlink options|r to create an export.")
+        end
     elseif event == "PLAYER_LOGIN" then
         if ns.Minimap then ns.Minimap:Create() end
-        ns.RefreshDecorInventory()
+        if ns.IsExportSupported("decorInventory") then ns.RefreshDecorInventory() end
     elseif event == "HOUSING_STORAGE_UPDATED" or event == "HOUSING_DECOR_PLACE_SUCCESS" or event == "HOUSING_DECOR_REMOVED" then
         ns.RefreshDecorInventory()
     elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_LIST_UPDATE" then
@@ -344,10 +374,14 @@ SlashCmdList.HAMMERLINK = function(message)
         ns.ShowAbout()
     elseif command == "options" or command == "settings" then
         ns.ShowOptions()
+    elseif command == "loadmsg on" or command == "loadmsg off" then
+        ns.db.showStartupMessage = command == "loadmsg on"
+        ns.Print("load message " .. (ns.db.showStartupMessage and "enabled." or "disabled."))
     elseif command == "help" then
         ns.Print("|cfff2d493/hammerlink export|r — choose a Consecrated Hammer code or AI-readable character report")
         ns.Print("|cfff2d493/hammerlink about|r — show version, links and important link notes")
         ns.Print("|cfff2d493/hammerlink options|r — open the same export chooser")
+        ns.Print("|cfff2d493/hammerlink loadmsg on|off|r — show or hide the startup message")
     else
         ns.Print("Unknown command. Use /hammerlink export, /hammerlink about or /hammerlink options.")
     end

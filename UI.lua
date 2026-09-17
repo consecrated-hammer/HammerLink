@@ -108,6 +108,14 @@ local exportCategories = {
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
 }
 
+local function visibleExportCategories()
+    local visible = {}
+    for _, category in ipairs(exportCategories) do
+        if ns.IsExportSupported(category.key) then visible[#visible + 1] = category end
+    end
+    return visible
+end
+
 local exportFormats = {
     { value = "ai", text = "AI-readable report" },
     { value = "compact", text = "Consecrated Hammer code" },
@@ -186,7 +194,7 @@ local function refreshChooser(f)
     local selectedCount = 0
     local selectedCategories = 0
     local selectedCharacters = 1000
-    for _, category in ipairs(exportCategories) do
+    for _, category in ipairs(f.categories) do
         local checked = ns.IsExportEnabled(category.key)
         local info = ns.GetExportCategoryInfo(f.snapshot, category.key, f.format == "ai")
         local row = f.rows[category.key]
@@ -283,13 +291,14 @@ local function createChooserDialog()
     categoryScroll:SetPoint("TOPLEFT", 24, -153)
     categoryScroll:SetPoint("BOTTOMRIGHT", -52, 77)
     local categoryContent = CreateFrame("Frame", nil, categoryScroll)
-    categoryContent:SetSize(510, math.max(410, #exportCategories * 45))
+    f.categories = visibleExportCategories()
+    categoryContent:SetSize(510, math.max(410, #f.categories * 45))
     categoryScroll:SetScrollChild(categoryContent)
     f.categoryScroll = categoryScroll
     f.categoryContent = categoryContent
 
     f.rows = {}
-    for index, category in ipairs(exportCategories) do
+    for index, category in ipairs(f.categories) do
         local rowTop = -4 - (index - 1) * 45
         local check = CreateFrame("CheckButton", nil, categoryContent, "UICheckButtonTemplate")
         check:SetSize(28, 28)
@@ -424,7 +433,11 @@ local function createAboutDialog()
     body:SetPoint("TOPLEFT", detail, "BOTTOMLEFT", 0, -20)
     body:SetWidth(444)
     body:SetJustifyH("LEFT")
-    body:SetText("HammerLink captures client-only character state for Consecrated Hammer or an AI-readable report: gear, every occupied bag slot, the current spellbook, talents, Vault progress, capped currencies, quests, Housing decor and observed profession entries. It never sends anything anywhere. Copy the export yourself; the addon is not your butler.")
+    local scope = "gear, every occupied bag slot, the current spellbook, talents, Vault progress, capped currencies, quests, Housing decor and observed profession entries"
+    if ns.IsForeverClient() then
+        scope = "gear, every occupied bag slot, the current spellbook, talents, quests and observed profession entries"
+    end
+    body:SetText("HammerLink captures client-only character state for Consecrated Hammer or an AI-readable report: " .. scope .. ". It never sends anything anywhere. Copy the export yourself; the addon is not your butler.")
 
     local tip = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     tip:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 0, -18)
