@@ -2,7 +2,7 @@
 ## Title: HammerLink (Camelot Retail-Compatibility Preview)
 ## Notes: Provisional Retail-style character exporter for Camelot.
 ## Author: consecrated-hammer
-## Version: 0.8.3
+## Version: 0.8.4
 ## X-ReleaseDate: 2026-09-18
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB

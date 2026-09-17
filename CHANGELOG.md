@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.8.4] - 2026-09-18
+
+- Publish distinct Retail and WoW Forever packages.
+
 ## [0.8.3] - 2026-09-18
 
 - Add provisional WoW Forever support, including client provenance in exports.
