@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.8.6] - 2026-09-18
+
+- Identify the Camelot TOC as WoW Forever beta and declare the `camelot` load game type.
+
 ## [0.8.5] - 2026-09-18
 
 - Publish one package that CurseForge classifies for both Retail and WoW Forever.
