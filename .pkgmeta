@@ -11,7 +11,6 @@ ignore:
   - .github
   - .gitignore
   - .pkgmeta
-  - HammerLink_Camelot.toc
   - DEVELOPMENT.md
   - tools
   - tests

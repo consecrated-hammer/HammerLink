@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.8.5] - 2026-09-18
+
+- Publish one package that CurseForge classifies for both Retail and WoW Forever.
+
 ## [0.8.4] - 2026-09-18
 
 - Publish distinct Retail and WoW Forever packages.
