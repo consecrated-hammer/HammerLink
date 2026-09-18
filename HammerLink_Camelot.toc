@@ -1,8 +1,8 @@
 ## Interface: 16001
-## Title: HammerLink (WoW Forever Beta)
-## Notes: WoW Forever (Camelot) beta build using HammerLink's Mainline backend.
+## Title: HammerLink (WoW Forever)
+## Notes: WoW Forever (Camelot) build using HammerLink's Mainline backend.
 ## Author: consecrated-hammer
-## Version: 0.8.6
+## Version: 0.8.7
 ## X-ReleaseDate: 2026-09-18
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB

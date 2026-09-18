@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.8.7] - 2026-09-18
+
+- Present the Camelot flavour as WoW Forever without beta or testing language.
+
 ## [0.8.6] - 2026-09-18
 
 - Identify the Camelot TOC as WoW Forever beta and declare the `camelot` load game type.
