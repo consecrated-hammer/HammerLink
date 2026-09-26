@@ -4,15 +4,12 @@
 
 ### Added
 
-- A **Classic** settings theme, Blizzard's 2004 look, on the Theme page or
-  with `/hammerlink theme classic` (applies after a reload).
-
 ### Changed
 
 - HammerLink now uses HammerCore, the settings, command and chat foundation
   shared by every Consecrated Hammer addon:
   - `/hammerlink` opens a settings window: an Export page (saved format, a
-    button to the chooser, reset export choices), Visibility, then Theme,
+    button to the chooser, reset export choices), Visibility, then
     Commands, Troubleshooting and About. The export chooser is
     `/hammerlink export` or a right-click on the minimap button; left-click
     opens settings.

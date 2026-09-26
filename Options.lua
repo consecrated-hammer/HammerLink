@@ -10,7 +10,7 @@ HC.Settings:NewPage({ name = "Export", description = "What an export contains an
     _, y = UI.Dropdown(panel, "Format", "The AI-readable report is Markdown; the code is for Consecrated Hammer.", y,
         { "ai", "compact" }, { "AI-readable report", "Consecrated Hammer code" },
         function() return ns.GetExportFormat() end,
-        function(value) ns.SetExportFormat(value) end, nil, 150)
+        function(value) ns.SetExportFormat(value) end, nil, 150, 240)
     _, y = UI.Text(panel, "Choose categories in the export chooser; your choices are remembered.", y)
     local open = UI.Button(panel, 180, 22, "primary")
     open:SetPoint("TOPLEFT", UI.PAD, y - 4)

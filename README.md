@@ -20,7 +20,7 @@ unavailable, unknown, empty and truncated data.
 
 Type `/hammerlink` (or `/hl`) for settings and `/hammerlink help` for every
 command. Settings hold the saved export format, the minimap button and startup
-message, and the shared Theme, Commands, Troubleshooting and About pages from
+message, and the shared Commands, Troubleshooting and About pages from
 [HammerCore](https://github.com/consecrated-hammer/HammerCore), vendored under
 `Libs/HammerCore`.
 
