@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.8] - 2026-09-26
+
+### Added
+
+- Add a copyable, character-data-free diagnostic report from `/hammerlink debug`
+  and the About panel.
+
 ## [0.8.7] - 2026-09-18
 
 - Present the Camelot flavour as WoW Forever without beta or testing language.

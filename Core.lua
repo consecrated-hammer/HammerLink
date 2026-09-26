@@ -339,6 +339,7 @@ end
 frame:SetScript("OnEvent", function(_, event, loadedName)
     if event == "ADDON_LOADED" then
         if loadedName ~= addonName then return end
+        ns.dbWasFresh = type(HammerLinkDB) ~= "table"
         HammerLinkDB = HammerLinkDB or { schemaVersion = 2, minimapAngle = 225, options = {} }
         HammerLinkDB.minimapAngle = HammerLinkDB.minimapAngle or 225
         if HammerLinkDB.showStartupMessage == nil then HammerLinkDB.showStartupMessage = true end
@@ -372,6 +373,9 @@ SlashCmdList.HAMMERLINK = function(message)
         ns.ShowExport()
     elseif command == "about" then
         ns.ShowAbout()
+    elseif command == "debug" or command == "diagnostics" then
+        if ns.ShowDiagnosticReport then ns.ShowDiagnosticReport()
+        else ns.Print("diagnostics are not ready yet.") end
     elseif command == "options" or command == "settings" then
         ns.ShowOptions()
     elseif command == "loadmsg on" or command == "loadmsg off" then
@@ -381,8 +385,9 @@ SlashCmdList.HAMMERLINK = function(message)
         ns.Print("|cfff2d493/hammerlink export|r — choose a Consecrated Hammer code or AI-readable character report")
         ns.Print("|cfff2d493/hammerlink about|r — show version, links and important link notes")
         ns.Print("|cfff2d493/hammerlink options|r — open the same export chooser")
+        ns.Print("|cfff2d493/hammerlink debug|r (or /hammerlink diagnostics) — open a copyable diagnostic report")
         ns.Print("|cfff2d493/hammerlink loadmsg on|off|r — show or hide the startup message")
     else
-        ns.Print("Unknown command. Use /hammerlink export, /hammerlink about or /hammerlink options.")
+        ns.Print("Unknown command. Use /hammerlink export, /hammerlink about, /hammerlink debug or /hammerlink options.")
     end
 end

@@ -18,6 +18,10 @@ Category choices persist and all start enabled. The compact export records what
 was selected; the AI-readable report explicitly distinguishes omitted,
 unavailable, unknown, empty and truncated data.
 
+Use `/hammerlink debug` or the **Troubleshooting** button in About to copy a
+short diagnostic report. It describes the loaded version, client, database and
+export availability without including character or export contents.
+
 It reads the client’s live state, which the public Blizzard Profile API does not expose promptly or at all:
 
 - exact Great Vault activities, thresholds, progress, tiers and generated rewards;

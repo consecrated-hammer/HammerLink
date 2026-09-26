@@ -2,10 +2,11 @@
 ## Title: HammerLink (WoW Forever)
 ## Notes: WoW Forever (Camelot) build using HammerLink's Mainline backend.
 ## Author: consecrated-hammer
-## Version: 0.8.7
-## X-ReleaseDate: 2026-09-18
+## Version: 0.8.8
+## X-ReleaseDate: 2026-09-26
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
+## LoadSavedVariablesFirst: 1
 ## IconTexture: Interface\AddOns\HammerLink\Textures\HammerLinkMain
 ## X-Website: https://github.com/consecrated-hammer/HammerLink
 ## X-CurseForge: https://www.curseforge.com/wow/addons/hammerlink
@@ -23,3 +24,4 @@ Core.lua
 Export.lua
 UI.lua
 UI\Minimap.lua
+Diagnostics.lua

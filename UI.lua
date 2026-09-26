@@ -401,7 +401,7 @@ end
 
 local function createAboutDialog()
     local f = CreateFrame("Frame", "HammerLinkAboutFrame", UIParent, "BackdropTemplate")
-    f:SetSize(500, 374)
+    f:SetSize(500, 414)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
@@ -422,7 +422,7 @@ local function createAboutDialog()
     detail:SetWidth(444)
     detail:SetJustifyH("LEFT")
     detail:SetText(table.concat({
-        "|cfff2d493Version|r  " .. tostring(ns.VERSION or "unknown"),
+        "|cfff2d493Version|r  " .. tostring(ns.GetMetadata("Version") or ns.VERSION or "unknown"),
         "|cfff2d493Released|r  " .. tostring(ns.GetMetadata("X-ReleaseDate") or "local build"),
         "|cfff2d493Author|r  " .. tostring(ns.GetMetadata("Author") or "consecrated-hammer"),
         "|cfff2d493License|r  " .. tostring(ns.GetMetadata("X-License") or "GPL-3.0"),
@@ -467,6 +467,14 @@ local function createAboutDialog()
     options:SetPoint("BOTTOMLEFT", forge, "TOPLEFT", 0, 8)
     options:SetText("Create export")
     options:SetScript("OnClick", function() ns.ShowOptions() end)
+
+    local diagnostics = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    diagnostics:SetSize(174, 24)
+    diagnostics:SetPoint("BOTTOMLEFT", options, "TOPLEFT", 0, 8)
+    diagnostics:SetText("Troubleshooting")
+    diagnostics:SetScript("OnClick", function()
+        if ns.ShowDiagnosticReport then ns.ShowDiagnosticReport() end
+    end)
 
     local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     close:SetSize(86, 22)
