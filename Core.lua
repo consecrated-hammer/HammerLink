@@ -318,8 +318,10 @@ function ns.GetMetadata(key)
     return GetAddOnMetadata and GetAddOnMetadata(addonName, key)
 end
 
+-- Chat output, settings, commands and the minimap button come from
+-- HammerCore (Libs/HammerCore); see Setup.lua.
 function ns.Print(message)
-    print("|cfff2d493HammerLink:|r " .. tostring(message or ""))
+    ns.HammerCore.Print(message)
 end
 
 local frame = CreateFrame("Frame")
@@ -340,9 +342,7 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
     if event == "ADDON_LOADED" then
         if loadedName ~= addonName then return end
         ns.dbWasFresh = type(HammerLinkDB) ~= "table"
-        HammerLinkDB = HammerLinkDB or { schemaVersion = 2, minimapAngle = 225, options = {} }
-        HammerLinkDB.minimapAngle = HammerLinkDB.minimapAngle or 225
-        if HammerLinkDB.showStartupMessage == nil then HammerLinkDB.showStartupMessage = true end
+        HammerLinkDB = HammerLinkDB or { schemaVersion = 2, options = {} }
         ns.db = HammerLinkDB
         ns.db.schemaVersion = 2
         ns.db.options = ns.db.options or {}
@@ -352,11 +352,8 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         for category, enabled in pairs(DEFAULT_OPTIONS) do
             if ns.db.options[category] == nil then ns.db.options[category] = enabled end
         end
-        if HammerLinkDB.showStartupMessage then
-            ns.Print("loaded — type |cffffd100/hammerlink options|r to create an export.")
-        end
+        ns.HammerCore:Start()
     elseif event == "PLAYER_LOGIN" then
-        if ns.Minimap then ns.Minimap:Create() end
         if ns.IsExportSupported("decorInventory") then ns.RefreshDecorInventory() end
     elseif event == "HOUSING_STORAGE_UPDATED" or event == "HOUSING_DECOR_PLACE_SUCCESS" or event == "HOUSING_DECOR_REMOVED" then
         ns.RefreshDecorInventory()
@@ -364,30 +361,3 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         ns.QueueProfessionRecipeCapture()
     end
 end)
-
-SLASH_HAMMERLINK1 = "/hammerlink"
-SLASH_HAMMERLINK2 = "/hl"
-SlashCmdList.HAMMERLINK = function(message)
-    local command = (message or ""):lower():match("^%s*(.-)%s*$")
-    if command == "" or command == "export" then
-        ns.ShowExport()
-    elseif command == "about" then
-        ns.ShowAbout()
-    elseif command == "debug" or command == "diagnostics" then
-        if ns.ShowDiagnosticReport then ns.ShowDiagnosticReport()
-        else ns.Print("diagnostics are not ready yet.") end
-    elseif command == "options" or command == "settings" then
-        ns.ShowOptions()
-    elseif command == "loadmsg on" or command == "loadmsg off" then
-        ns.db.showStartupMessage = command == "loadmsg on"
-        ns.Print("load message " .. (ns.db.showStartupMessage and "enabled." or "disabled."))
-    elseif command == "help" then
-        ns.Print("|cfff2d493/hammerlink export|r — choose a Consecrated Hammer code or AI-readable character report")
-        ns.Print("|cfff2d493/hammerlink about|r — show version, links and important link notes")
-        ns.Print("|cfff2d493/hammerlink options|r — open the same export chooser")
-        ns.Print("|cfff2d493/hammerlink debug|r (or /hammerlink diagnostics) — open a copyable diagnostic report")
-        ns.Print("|cfff2d493/hammerlink loadmsg on|off|r — show or hide the startup message")
-    else
-        ns.Print("Unknown command. Use /hammerlink export, /hammerlink about, /hammerlink debug or /hammerlink options.")
-    end
-end

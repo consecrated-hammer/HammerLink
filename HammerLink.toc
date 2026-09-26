@@ -17,8 +17,10 @@
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
 
+Libs\HammerCore\HammerCore.xml
 Core.lua
+Setup.lua
 Export.lua
 UI.lua
-UI\Minimap.lua
+Options.lua
 Diagnostics.lua

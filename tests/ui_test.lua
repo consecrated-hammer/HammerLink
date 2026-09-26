@@ -191,7 +191,7 @@ compactOption.func()
 assert(chooser.format == "compact" and namespace.db.exportFormat == "compact", "expected compact selection to persist")
 assert(chooser.formatDropdown.selectedValue == "compact" and chooser.formatDropdown.dropdownText == "Consecrated Hammer code", "expected dropdown selection to refresh")
 assert(not chooser.rows.professionRecipes.warning.shown, "expected AI size warning to stay hidden for compact exports")
-namespace.ShowOptions()
+namespace.ShowExport()
 assert(chooser.shown and chooser.format == "compact", "expected the last selected format to be remembered")
 aiOption.func()
 assert(chooser.format == "ai" and namespace.db.exportFormat == "ai", "expected AI-readable selection to persist")
@@ -214,27 +214,12 @@ assert(HammerLinkExportFrame and HammerLinkExportFrame.box.text:find("# AI repor
 assert(HammerLinkExportFrame.box.highlightedText, "expected complete output to be selected for copying")
 assert(HammerLinkExportFrame.box.height == 250, "expected native multiline growth instead of a capped report height")
 
-namespace.ShowOptions()
-assert(chooser.shown and chooser.format == "ai", "expected /hl options compatibility to retain the selected format")
+namespace.ShowExport()
+assert(chooser.shown and chooser.format == "ai", "expected reopening the chooser to retain the selected format")
 compactOption.func()
 generate.scripts.OnClick()
 assert(namespace.lastCompact and namespace.lastCompact.exportOptions.bagItems == false, "expected selected compact snapshot")
 assert(HammerLinkExportFrame.box.text == "HL1:test", "expected compact code in the same copy dialog")
 
-namespace.ShowAbout()
-local about = HammerLinkAboutFrame
-local forge
-for _, frame in ipairs(frames) do
-    if frame.text == "Forge another link" then forge = frame end
-end
-assert(about and about.shown and forge, "expected the About dialog and Forge another link button")
-forge.scripts.OnClick()
-assert(namespace.lastMessage and namespace.lastMessage:find("Tip: ", 1, true) == 1, "expected the forged tip to be printed to chat")
-local displayedTip = namespace.lastMessage:sub(6)
-local matchingTip
-for _, frame in ipairs(frames) do
-    if frame.text and frame.text:find("Tip:", 1, true) and frame.text:find(displayedTip, 1, true) then matchingTip = frame end
-end
-assert(matchingTip, "expected the chat tip to match the tip displayed in About")
-
+-- About is HammerCore's standard page; see addon_test.lua.
 print("HammerLink UI tests passed")

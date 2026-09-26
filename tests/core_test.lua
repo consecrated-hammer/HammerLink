@@ -29,10 +29,13 @@ C_TradeSkillUI = {
     GetTradeSkillLineForRecipe = function() return 755, "Classic Jewelcrafting" end,
 }
 
+namespace.HammerCore = { Start = function() namespace.started = true end,
+    Print = function(message) messages[#messages + 1] = message end }
 assert(loadfile("Core.lua"))("HammerLink", namespace)
 assert(namespace.VERSION == "0.8.2", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
+assert(namespace.started, "expected HammerCore to start once saved variables load")
 assert(namespace.GetExportFormat() == "ai" and namespace.db.exportFormat == "ai", "expected AI-readable exports to be the persisted default")
 assert(namespace.SetExportFormat("compact") and namespace.GetExportFormat() == "compact", "expected export format changes to persist")
 assert(not namespace.SetExportFormat("invalid") and namespace.GetExportFormat() == "compact", "expected invalid export formats to be rejected")
@@ -48,25 +51,5 @@ UnitFullName = function() return "SecondCharacter", "Dath'Remar" end
 local secondCharacter = namespace.GetProfessionRecipes()
 assert(secondCharacter.available == false, "expected profession cache to stay scoped to the exporting character")
 
-local exports, about, options = 0, 0, 0
-namespace.ShowExport = function() exports = exports + 1 end
-namespace.ShowAbout = function() about = about + 1 end
-namespace.ShowOptions = function() options = options + 1 end
-
-SlashCmdList.HAMMERLINK("export")
-SlashCmdList.HAMMERLINK("about")
-SlashCmdList.HAMMERLINK("options")
-SlashCmdList.HAMMERLINK("")
-assert(exports == 2, "expected bare and export commands to open export")
-assert(about == 1, "expected about command to open About")
-assert(options == 1, "expected options command to open export settings")
-
-SlashCmdList.HAMMERLINK("help")
-local documentedOptions, documentedLoadMessage = false, false
-for _, message in ipairs(messages) do
-    documentedOptions = documentedOptions or message:find("options", 1, true) ~= nil
-    documentedLoadMessage = documentedLoadMessage or message:find("loadmsg on|off", 1, true) ~= nil
-end
-assert(documentedOptions and documentedLoadMessage, "expected help to document options and the load-message control")
-
+-- Commands, help and the startup message are HammerCore's; see addon_test.lua.
 print("HammerLink core tests passed")

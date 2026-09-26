@@ -6,7 +6,7 @@
 [![Client](https://img.shields.io/badge/client-retail-4c9a7a?style=flat-square)](https://worldofwarcraft.blizzard.com/)
 
 HammerLink is a local World of Warcraft character-data exporter and a readable
-bridge from WoW to AI assistants. Use its minimap button, or type
+bridge from WoW to AI assistants. Right-click its minimap button, or type
 `/hammerlink export` (also `/hl export`), to open one export chooser. Select a
 compact `HL1:` snapshot for a compatible importer or a Markdown report to paste
 directly into ChatGPT, Claude or another AI.
@@ -18,7 +18,13 @@ Category choices persist and all start enabled. The compact export records what
 was selected; the AI-readable report explicitly distinguishes omitted,
 unavailable, unknown, empty and truncated data.
 
-Use `/hammerlink debug` or the **Troubleshooting** button in About to copy a
+Type `/hammerlink` (or `/hl`) for settings and `/hammerlink help` for every
+command. Settings hold the saved export format, the minimap button and startup
+message, and the shared Theme, Commands, Troubleshooting and About pages from
+[HammerCore](https://github.com/consecrated-hammer/HammerCore), vendored under
+`Libs/HammerCore`.
+
+Use `/hammerlink debug` or **Copy report** on the Troubleshooting page to copy a
 short diagnostic report. It describes the loaded version, client, database and
 export availability without including character or export contents.
 

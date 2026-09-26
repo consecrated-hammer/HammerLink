@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- HammerLink now uses HammerCore, the settings, command and chat foundation
+  shared by every Consecrated Hammer addon:
+  - `/hammerlink` opens a settings window: an Export page (saved format, a
+    button to the chooser, reset export choices), Visibility, then Theme,
+    Commands, Troubleshooting and About. The export chooser is
+    `/hammerlink export` or a right-click on the minimap button; left-click
+    opens settings.
+  - The login message reads `HammerLink v0.8.8 loaded - type /hammerlink
+    for settings, /hammerlink help for commands`, and chat uses the shared
+    gold name prefix.
+  - About is the shared page: its tips rotate under a pressable HammerLink
+    icon ("Forge another link"), with a lore quiz behind the "!".
+  - Your startup-message and minimap-position choices carry over, and the
+    minimap button can now be hidden.
+
+### Removed
+
+- The separate About dialog, and `/hammerlink options`, `settings`,
+  `diagnostics` and `loadmsg`; use the bare command, `debug` and `startup`.
+
 ## [0.8.8] - 2026-09-26
 
 ### Added

@@ -1,14 +1,18 @@
 local namespace = {
     VERSION = "stale fallback",
     dbWasFresh = true,
-    db = { schemaVersion = 2, minimapAngle = 225 },
-    Minimap = { button = {
-        IsShown = function() return true end,
-        GetPoint = function()
-            return "CENTER", { GetName = function() return "PrivateCharacterName" end },
-                "CENTER", 4, -8
-        end,
-    } },
+    db = { schemaVersion = 2 },
+    -- HammerCore owns the minimap button and its saved angle.
+    HammerCore = {
+        State = function() return { minimapAngle = 225 } end,
+        Minimap = { button = {
+            IsShown = function() return true end,
+            GetPoint = function()
+                return "CENTER", { GetName = function() return "PrivateCharacterName" end },
+                    "CENTER", 4, -8
+            end,
+        } },
+    },
     GetMetadata = function(key) if key == "Version" then return "0.8.8" end end,
     IsForeverClient = function() return false end,
     IsExportSupported = function() return true end,
@@ -28,7 +32,8 @@ GetBuildInfo = function() return nil, nil, nil, 120100 end
 
 assert(loadfile("Diagnostics.lua"))("HammerLink", namespace)
 local report = namespace.BuildDiagnosticReport()
-assert(report:find("Version: 0.8.8", 1, true), "expected the loaded TOC version")
+-- HammerCore's report header carries the version; this adds HammerLink's lines.
+assert(report:find("Minimap stored angle: 225", 1, true), "expected HammerCore's minimap angle")
 assert(report:find("Target: Retail", 1, true), "expected client identification")
 assert(report:find("Database: created this load", 1, true), "expected database state")
 assert(report:find("Profession cache: available", 1, true), "expected cache availability")

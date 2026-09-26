@@ -1,18 +1,8 @@
 local addonName, ns = ...
 
 local dialog
-local aboutDialog
 local chooserDialog
 
-local aboutTips = {
-    "Every bag slot was inspected. The potions are innocent until opened.",
-    "No network requests were made. The bits stayed home.",
-    "The Great Vault remembers. HammerLink merely takes notes.",
-    "Item links are tiny historical documents with an alarming number of colons.",
-    "Your reagent bag has been perceived respectfully.",
-    "Compression level nine: because character data deserves a snug blanket.",
-    "The readable report speaks fluent robot, but remains perfectly legible to humans.",
-}
 
 local function createDialog()
     local f = CreateFrame("Frame", "HammerLinkExportFrame", UIParent, "BackdropTemplate")
@@ -34,7 +24,7 @@ local function createDialog()
     help:SetPoint("TOPLEFT", 24, -45)
     help:SetPoint("TOPRIGHT", -24, -45)
     help:SetJustifyH("LEFT")
-    help:SetText("Copy this into Consecrated Hammer. It includes the categories enabled in /hammerlink options. It is local data: nothing is uploaded by the addon.")
+    help:SetText("Copy this into Consecrated Hammer. It includes the categories chosen in the export chooser. It is local data: nothing is uploaded by the addon.")
 
     local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 25, -78)
@@ -388,105 +378,8 @@ function ns.ShowExport()
         return
     end
     chooserDialog = chooserDialog or createChooserDialog()
-    if aboutDialog then aboutDialog:Hide() end
     chooserDialog.snapshot = snapshot
     chooserDialog.format = ns.GetExportFormat()
     refreshChooser(chooserDialog)
     chooserDialog:Show()
-end
-
-function ns.ShowOptions()
-    ns.ShowExport()
-end
-
-local function createAboutDialog()
-    local f = CreateFrame("Frame", "HammerLinkAboutFrame", UIParent, "BackdropTemplate")
-    f:SetSize(500, 414)
-    f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
-    f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
-    f:Hide()
-    f:SetMovable(true)
-    f:EnableMouse(true)
-    f:EnableKeyboard(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
-
-    local title = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    title:SetPoint("TOP", 0, -18)
-    title:SetText("About HammerLink")
-
-    local detail = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    detail:SetPoint("TOPLEFT", 28, -52)
-    detail:SetWidth(444)
-    detail:SetJustifyH("LEFT")
-    detail:SetText(table.concat({
-        "|cfff2d493Version|r  " .. tostring(ns.GetMetadata("Version") or ns.VERSION or "unknown"),
-        "|cfff2d493Released|r  " .. tostring(ns.GetMetadata("X-ReleaseDate") or "local build"),
-        "|cfff2d493Author|r  " .. tostring(ns.GetMetadata("Author") or "consecrated-hammer"),
-        "|cfff2d493License|r  " .. tostring(ns.GetMetadata("X-License") or "GPL-3.0"),
-        "|cfff2d493Source|r  " .. tostring(ns.GetMetadata("X-Website") or ""),
-    }, "\n"))
-
-    local body = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    body:SetPoint("TOPLEFT", detail, "BOTTOMLEFT", 0, -20)
-    body:SetWidth(444)
-    body:SetJustifyH("LEFT")
-    local scope = "gear, every occupied bag slot, the current spellbook, talents, Vault progress, capped currencies, quests, Housing decor and observed profession entries"
-    if ns.IsForeverClient() then
-        scope = "gear, every occupied bag slot, the current spellbook, talents, quests and observed profession entries"
-    end
-    body:SetText("HammerLink captures client-only character state for Consecrated Hammer or an AI-readable report: " .. scope .. ". It never sends anything anywhere. Copy the export yourself; the addon is not your butler.")
-
-    local tip = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    tip:SetPoint("TOPLEFT", body, "BOTTOMLEFT", 0, -18)
-    tip:SetWidth(444)
-    tip:SetJustifyH("LEFT")
-    local lastTip
-    local function showTip()
-        local nextTip
-        repeat nextTip = math.random(#aboutTips) until #aboutTips == 1 or nextTip ~= lastTip
-        lastTip = nextTip
-        local tipText = aboutTips[nextTip]
-        tip:SetText("|cfff2d493Tip:|r " .. tipText)
-        return tipText
-    end
-    showTip()
-
-    local forge = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    forge:SetSize(174, 36)
-    forge:SetPoint("BOTTOMLEFT", 28, 22)
-    forge:SetText("Forge another link")
-    forge:SetScript("OnClick", function()
-        ns.Print("Tip: " .. showTip())
-    end)
-
-    local options = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    options:SetSize(174, 24)
-    options:SetPoint("BOTTOMLEFT", forge, "TOPLEFT", 0, 8)
-    options:SetText("Create export")
-    options:SetScript("OnClick", function() ns.ShowOptions() end)
-
-    local diagnostics = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    diagnostics:SetSize(174, 24)
-    diagnostics:SetPoint("BOTTOMLEFT", options, "TOPLEFT", 0, 8)
-    diagnostics:SetText("Troubleshooting")
-    diagnostics:SetScript("OnClick", function()
-        if ns.ShowDiagnosticReport then ns.ShowDiagnosticReport() end
-    end)
-
-    local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    close:SetSize(86, 22)
-    close:SetPoint("BOTTOMRIGHT", -28, 29)
-    close:SetText("Close")
-    close:SetScript("OnClick", function() f:Hide() end)
-    f:SetScript("OnKeyDown", function(_, key) if key == "ESCAPE" then f:Hide() end end)
-    f:SetPropagateKeyboardInput(false)
-    return f
-end
-
-function ns.ShowAbout()
-    aboutDialog = aboutDialog or createAboutDialog()
-    aboutDialog:Show()
 end
