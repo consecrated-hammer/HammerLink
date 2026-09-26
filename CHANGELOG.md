@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- A **Classic** settings theme, Blizzard's 2004 look, on the Theme page or
+  with `/hammerlink theme classic` (applies after a reload).
+
 ### Changed
 
 - HammerLink now uses HammerCore, the settings, command and chat foundation
