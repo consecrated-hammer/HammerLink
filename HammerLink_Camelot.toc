@@ -2,7 +2,7 @@
 ## Title: HammerLink (WoW Forever)
 ## Notes: WoW Forever (Camelot) build using HammerLink's Mainline backend.
 ## Author: consecrated-hammer
-## Version: 0.8.8
+## Version: 0.9.0
 ## X-ReleaseDate: 2026-09-26
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB

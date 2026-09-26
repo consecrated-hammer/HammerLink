@@ -2,24 +2,28 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-26
+
 ### Added
+
+- A lore quiz: the quest "!" on the About page, or `/hammerlink quiz`, asks five
+  questions suited to your client, class and race. **Share result** posts
+  the verdict to yourself, Say or Party in one click; it is unavailable in
+  combat and during keys, PvP matches and encounters.
+- Settings: an Export page (saved format, a button to the chooser, reset
+  export choices), Visibility, then Commands, Troubleshooting and About.
+- The minimap button can be hidden.
 
 ### Changed
 
-- HammerLink now uses HammerCore, the settings, command and chat foundation
-  shared by every Consecrated Hammer addon:
-  - `/hammerlink` opens a settings window: an Export page (saved format, a
-    button to the chooser, reset export choices), Visibility, then
-    Commands, Troubleshooting and About. The export chooser is
-    `/hammerlink export` or a right-click on the minimap button; left-click
-    opens settings.
-  - The login message reads `HammerLink v0.8.8 loaded - type /hammerlink
-    for settings, /hammerlink help for commands`, and chat uses the shared
-    gold name prefix.
-  - About is the shared page: its tips rotate under a pressable HammerLink
-    icon ("Forge another link"), with a lore quiz behind the "!".
-  - Your startup-message and minimap-position choices carry over, and the
-    minimap button can now be hidden.
+- HammerLink now uses HammerCore, the settings, command and chat foundation shared
+  by every Consecrated Hammer addon. The login message reads
+  `HammerLink v0.9.0 loaded - type /hammerlink for settings, /hammerlink help for commands`, chat uses
+  a gold name prefix, and `/hammerlink help` lists every command.
+- `/hammerlink` opens settings. The export chooser is `/hammerlink export` or
+  a right-click on the minimap button; left-click opens settings.
+- About is the shared page: its tips rotate under a pressable HammerLink icon.
+- Your startup-message and minimap-position choices carry over.
 
 ### Removed
 
