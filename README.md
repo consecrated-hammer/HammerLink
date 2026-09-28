@@ -64,6 +64,11 @@ where available. Review either format before sharing it as character data.
 - `Textures/HammerLinkMain.tga` is the 128×128 addon-list icon.
 - `Textures/HammerLinkClean.tga` is the 128×128 transparent minimap icon.
 
+## Support
+
+Bug reports, ideas and questions: the [Consecrated Hammer Discord](https://discord.gg/z3xKxRygDc)
+(`#bug-reports`, `#suggestions`, `#help`).
+
 ## Development
 
 `Copy-ToWoWAddons.local.ps1` copies a clean release-shaped folder to a Retail AddOns directory. CI parses every Lua file with Lua 5.1 and verifies every listed Lua file is in the TOC.
