@@ -1,73 +1,78 @@
 # HammerLink
 
-[![CurseForge](https://img.shields.io/curseforge/v/1656375?style=flat-square&color=4c9a7a&label=curseforge)](https://www.curseforge.com/wow/addons/hammerlink)
-[![Downloads](https://img.shields.io/curseforge/dt/1656375?style=flat-square&color=4c9a7a&label=downloads)](https://www.curseforge.com/wow/addons/hammerlink)
-[![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](LICENSE.txt)
-[![Client](https://img.shields.io/badge/client-retail-4c9a7a?style=flat-square)](https://worldofwarcraft.blizzard.com/)
+**Your character, exported.**
 
-HammerLink is a local World of Warcraft character-data exporter and a readable
-bridge from WoW to AI assistants. Right-click its minimap button, or type
-`/hammerlink export` (also `/hl export`), to open one export chooser. Select a
-compact `HL1:` snapshot for a compatible importer or a Markdown report to paste
-directly into ChatGPT, Claude or another AI.
+_Paste it into your AI agent and watch it finally understand your bags._
 
-The chooser shows a live record count for every category and the total selected
-output. AI-readable sections expected to add substantial text get a warning
-icon with their estimated character count; the warning never blocks export.
-Category choices persist and all start enabled. The compact export records what
-was selected; the AI-readable report explicitly distinguishes omitted,
-unavailable, unknown, empty and truncated data.
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/z3xKxRygDc) [![Retail](https://img.shields.io/badge/retail-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/hammerlink) [![WoW Forever](https://img.shields.io/badge/wow%20forever-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/hammerlink) [![Release](https://img.shields.io/github/v/release/consecrated-hammer/HammerLink?style=flat-square&color=4c9a7a&label=release)](https://github.com/consecrated-hammer/HammerLink/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](https://github.com/consecrated-hammer/HammerLink/blob/main/LICENSE.txt)
 
-Type `/hammerlink` (or `/hl`) for settings and `/hammerlink help` for every
-command. Settings hold the saved export format, the minimap button and startup
-message, and the shared Commands, Troubleshooting and About pages from
-[HammerCore](https://github.com/consecrated-hammer/HammerCore), vendored under
-`Libs/HammerCore`.
+Questions, bugs or ideas? Come say hi on the [Consecrated Hammer Discord](https://discord.gg/z3xKxRygDc). Bug reports go in `#bug-reports`, or you can open a [GitHub issue](https://github.com/consecrated-hammer/HammerLink/issues).
 
-Use `/hammerlink debug` or **Copy report** on the Troubleshooting page to copy a
-short diagnostic report. It describes the loaded version, client, database and
-export availability without including character or export contents.
+---
 
-It reads the client’s live state, which the public Blizzard Profile API does not expose promptly or at all:
+HammerLink exports your character's live data from the game, either as a readable report you can paste straight into ChatGPT, Claude or another AI, or as a compact `HL1:` snapshot for tools that import it. It reads what the game knows right now, including things the Blizzard armory API doesn't show or only updates much later.
 
-- exact Great Vault activities, thresholds, progress, tiers and generated rewards;
-- currently equipped item links, including modifiers;
-- every occupied slot in the backpack, equipped bags and reagent bag, including
-  full links, stack size, type, quality, binding, sell value and available
-  item-level, durability, equipment-set, gem and resolved-stat details;
-- the active talent import string;
-- capped currency records, including crests when listed by the client, with
-  current amounts and available weekly/seasonal cap and earned fields;
-- the current quest log, including objective progress, quest types, timers and
-  available map waypoints;
-- the complete set of owned Housing Catalog decor entries, including storage,
-  placed and redeemable counts (account housing data, when the client catalog
-  has finished loading);
-- learned profession recipes, gathering techniques and bonuses positively
-  observed after opening the matching profession window; unopened professions
-  remain unknown rather than empty;
-- current spellbook entries exposed by the client, with spell IDs, skill lines,
-  passive/off-spec flags and spellbook/flyout source where available;
-- character identity, class, spec and item level at capture time.
+## What it does
 
-The addon makes no network requests. `HL1:` exports are versioned UTF-8 JSON
-snapshots compressed with embedded LibDeflate and encoded with LibDeflate's
-printable alphabet for safe copy/paste. They are not Base64 and they are not
-encrypted. To inspect one programmatically, remove the `HL1:` prefix, run
-LibDeflate `DecodeForPrint`, then `DecompressDeflate`, and parse the resulting
-UTF-8 JSON. AI-readable exports use structured Markdown with names and IDs
-where available. Review either format before sharing it as character data.
+- **Two formats.** The AI-readable report is structured Markdown with names, IDs and clearly labelled gaps. The `HL1:` snapshot is compact and versioned for importers.
+- **Pick what goes in.** The export chooser shows a live count for each category and the total size. Your picks and format are remembered, and big reports get a size warning (it never blocks the export).
+- **Honest about gaps.** The report keeps "you left it out", "the game didn't provide it" and "there's nothing there" separate, so an unopened profession isn't read as having no recipes.
+- **Nothing leaves your PC.** HammerLink makes no network requests. You copy the export yourself.
+
+## Getting started
+
+Install, then right-click the minimap button or type `/hl export` to open the export chooser. Pick a format, tick the categories you want, and copy the result.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `/hammerlink` or `/hl` | Open settings |
+| `/hammerlink export` or `/hl export` | Open the export chooser |
+
+Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `startup`, `minimap`, `reset settings` and `quiz`. HammerLink's `debug` report covers the addon and client only, never your character or export contents.
+
+## What it can export
+
+| Category | What's in it |
+| --- | --- |
+| Character | Name, realm, class, spec and item level at capture time |
+| Equipped gear | Item links, including modifiers |
+| Bag items | Every occupied backpack, bag and reagent bag slot, with stack size, quality, binding, item level, gems and stats where available |
+| Current spellbook | Spell IDs, skill lines, passive and off-spec flags, and flyouts |
+| Active talents | The talent import string |
+| Great Vault | Activities, thresholds, progress, tiers and generated rewards |
+| Currency caps and currencies | Current amounts, plus weekly and seasonal cap progress |
+| Current reputations | Visible faction standings and progress |
+| Housing decor | Owned decor, with stored, placed and redeemable counts |
+| Current quest log | Objective progress, quest types, timers and map waypoints |
+| Learned recipes and techniques | Recipes, gathering techniques and bonuses, once you've opened that profession's window |
+
+On WoW Forever, the Great Vault, Housing decor and currency categories aren't offered because Forever doesn't have them, and spec and item level are left out of the character details. The talent string is included when the client provides one.
+
+## The HL1 format
+
+`HL1:` snapshots are UTF-8 JSON, compressed with LibDeflate and encoded with LibDeflate's copy-paste-safe alphabet. They aren't Base64 and they aren't encrypted. To read one yourself:
+
+1. Remove the `HL1:` prefix.
+2. Decode the rest with LibDeflate `DecodeForPrint`.
+3. Inflate it with `DecompressDeflate`.
+4. Parse the resulting JSON.
+
+## Limits
+
+- **Only what the game shows.** Professions only appear after you've opened their window, and anything the client hides stays out.
+- **Check before sharing.** Both formats are plain character data. Have a look before posting one anywhere public.
+
+## Licence
+
+GPL v3, see [LICENSE.txt](https://github.com/consecrated-hammer/HammerLink/blob/main/LICENSE.txt). The embedded LibStub (public domain) and LibDeflate (zlib) keep their own notices in `Libs/`.
 
 ## Artwork
 
 - `Textures/HammerLink-curseforge-400.png` is the 400×400 project icon for CurseForge.
 - `Textures/HammerLinkMain.tga` is the 128×128 addon-list icon.
 - `Textures/HammerLinkClean.tga` is the 128×128 transparent minimap icon.
-
-## Support
-
-Bug reports, ideas and questions: the [Consecrated Hammer Discord](https://discord.gg/z3xKxRygDc)
-(`#bug-reports`, `#suggestions`, `#help`).
 
 ## Development
 
