@@ -1,23 +1,39 @@
 local addonName, ns = ...
 
-local LibDeflate = LibStub("LibDeflate")
+local LibDeflate = assert(ns.LibDeflate, "HammerLink compressor is missing")
+
+-- Keep these aligned with wow-site's HAMMERLINK_LIMITS.
+local MAX_DECOMPRESSED_BYTES = 32 * 1024 * 1024
+local MAX_ENCODED_LENGTH = 4 * 1024 * 1024
 
 -- This encoder deliberately handles only values HammerLink emits. Keeping the
 -- payload shape explicit avoids serialising arbitrary Blizzard tables whose
 -- fields can change or become private between client patches.
-local function quote(value)
-    return '"' .. tostring(value):gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r'):gsub('\t', '\\t') .. '"'
+local function quote(value, checkpoint)
+    if checkpoint and #tostring(value) > 16384 then
+        local parts = {}
+        value = tostring(value)
+        for start = 1, #value, 16384 do
+            checkpoint()
+            parts[#parts + 1] = quote(value:sub(start, start + 16383)):sub(2, -2)
+        end
+        return '"' .. table.concat(parts) .. '"'
+    end
+    return '"' .. tostring(value):gsub('\\', '\\\\'):gsub('"', '\\"')
+        :gsub('[%z\1-\31]', function(char) return string.format("\\u%04x", string.byte(char)) end) .. '"'
 end
 
-local function encode(value)
+local function encode(value, checkpoint)
+    if checkpoint then checkpoint() end
     local kind = type(value)
-    if kind == "string" then return quote(value) end
+    if kind == "string" then return quote(value, checkpoint) end
     if kind == "number" then return tostring(value) end
     if kind == "boolean" then return value and "true" or "false" end
     if kind ~= "table" then return "null" end
 
     local count, maximumIndex, array = 0, 0, true
     for key in pairs(value) do
+        if checkpoint then checkpoint() end
         count = count + 1
         if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
             array = false
@@ -28,12 +44,12 @@ local function encode(value)
     array = array and maximumIndex == count
     if array then
         local values = {}
-        for i = 1, count do values[i] = encode(value[i]) end
+        for i = 1, count do values[i] = encode(value[i], checkpoint) end
         return "[" .. table.concat(values, ",") .. "]"
     end
     local pairsOut = {}
     for key, item in pairs(value) do
-        pairsOut[#pairsOut + 1] = quote(key) .. ":" .. encode(item)
+        pairsOut[#pairsOut + 1] = quote(key, checkpoint) .. ":" .. encode(item, checkpoint)
     end
     table.sort(pairsOut)
     return "{" .. table.concat(pairsOut, ",") .. "}"
@@ -584,7 +600,7 @@ end
 
 local CATEGORY_ORDER = {
     "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
-    "decorInventory", "questLog", "professionRecipes",
+    "decorInventory", "questLog", "professionRecipes", "achievements",
 }
 
 local CATEGORY_FIELDS = {
@@ -592,6 +608,7 @@ local CATEGORY_FIELDS = {
     vault = "vault", currencyCaps = "currencyCaps", currencies = "currencies", reputations = "reputations",
     decorInventory = "decorInventory", questLog = "questLog",
     professionRecipes = "professionRecipes",
+    achievements = "achievements",
 }
 
 local CATEGORY_TITLES = {
@@ -599,6 +616,7 @@ local CATEGORY_TITLES = {
     vault = "Great Vault", currencyCaps = "Currency caps", currencies = "Current currencies", reputations = "Current reputations",
     decorInventory = "Housing decor inventory", questLog = "Current quest log",
     professionRecipes = "Learned recipes and techniques",
+    achievements = "Achievements",
 }
 
 local function selectedOptions(options)
@@ -606,6 +624,7 @@ local function selectedOptions(options)
     options = options or ns.GetExportOptions()
     for _, category in ipairs(CATEGORY_ORDER) do
         selected[category] = ns.IsExportSupported(category) and options[category] ~= false
+        if category == "achievements" then selected[category] = options[category] == true end
     end
     return selected
 end
@@ -614,6 +633,7 @@ function ns.BuildSnapshot(options)
     local selected = selectedOptions(options)
     local snapshot = {
         format = 3,
+        addonVersion = ns.GetMetadata and ns.GetMetadata("Version") or ns.VERSION,
         capturedAt = time(),
         character = character(),
         exportOptions = selected,
@@ -637,12 +657,16 @@ function ns.BuildSnapshot(options)
     if selected.decorInventory then snapshot.decorInventory = ns.GetDecorInventory() end
     if selected.questLog then snapshot.questLog = questLog() end
     if selected.professionRecipes then snapshot.professionRecipes = ns.GetProfessionRecipes() end
+    if selected.achievements then snapshot.achievements = ns.GetAchievements() end
     return snapshot
 end
 
 function ns.BuildCompleteSnapshot()
     local all = {}
     for _, category in ipairs(CATEGORY_ORDER) do all[category] = true end
+    -- Achievement collection is opt-in and batched by the chooser. Opening
+    -- the chooser must not scan the complete achievement tree.
+    all.achievements = false
     return ns.BuildSnapshot(all)
 end
 
@@ -650,6 +674,7 @@ function ns.SelectSnapshot(snapshot, options)
     local selected = selectedOptions(options)
     local result = {
         format = snapshot.format,
+        addonVersion = snapshot.addonVersion,
         capturedAt = snapshot.capturedAt,
         character = snapshot.character,
         exportOptions = selected,
@@ -701,6 +726,8 @@ function ns.FormatExportSummary(snapshot)
     add("quests", options.questLog, quests and #(quests.entries or {}) or 0, quests and quests.available == false)
     local recipes = snapshot.professionRecipes
     add("profession entries", options.professionRecipes, countRecipes(recipes), recipes and recipes.available == false)
+    local achievements = snapshot.achievements
+    add("achievements", options.achievements, achievements and #achievements.entries or 0, not achievements or achievements.available == false)
     return "exported — " .. table.concat(parts, "; ")
 end
 
@@ -781,6 +808,7 @@ local function itemLine(item, location)
 end
 
 local function categoryCount(snapshot, category)
+    if category == "achievements" then return snapshot.achievements and #snapshot.achievements.entries or 0 end
     if category == "equipment" then return #(snapshot.equipment or {}) end
     if category == "bagItems" then return #(snapshot.bagEquipment or {}) end
     if category == "currentSpellbook" then return snapshot.currentSpellbook and #(snapshot.currentSpellbook.spells or {}) or 0 end
@@ -801,6 +829,7 @@ end
 local function categoryUnavailable(snapshot, category)
     local field = CATEGORY_FIELDS[category]
     local value = snapshot[field]
+    if category == "achievements" then return not value or value.available == false end
     if category == "talents" then return not (value and value.importString) end
     if category == "vault" then
         return not (value and (value.currentPeriod ~= nil or value.hasAvailableRewards ~= nil
@@ -857,7 +886,26 @@ local function specialisationText(specID)
     return specID and ("ID " .. tostring(specID)) or "unknown"
 end
 
+local buildSection
+
+-- The chooser measures every AI section on each refresh. Captured category
+-- tables are not modified afterwards, so reuse each rendered section until
+-- the chooser drops that capture.
+local sectionCache = setmetatable({}, { __mode = "k" })
+
 local function reportSection(snapshot, category)
+    local value = snapshot[CATEGORY_FIELDS[category]]
+    if type(value) ~= "table" then return buildSection(snapshot, category) end
+    local cached = sectionCache[value]
+    if not cached then
+        cached = buildSection(snapshot, category)
+        sectionCache[value] = cached
+    end
+    return cached
+end
+
+function buildSection(snapshot, category)
+    if category == "achievements" then return ns.AchievementReport(snapshot.achievements) end
     local lines = { "## " .. CATEGORY_TITLES[category], "" }
     if categoryUnavailable(snapshot, category) then
         append(lines, "**Unavailable:** " .. unavailableReason(snapshot, category))
@@ -1069,6 +1117,7 @@ function ns.BuildAIReport(snapshot)
     append(lines, "> Captured from World of Warcraft by HammerLink. Omitted, unavailable and unknown data are not evidence that a character has none.")
     append(lines, "")
     append(lines, "- Captured at: " .. capturedTime(snapshot.capturedAt))
+    append(lines, "- HammerLink format version: " .. tostring(snapshot.format or "unknown"))
     append(lines, "- Character: " .. characterLabel)
     append(lines, "- Class: " .. classText(characterData.class))
     append(lines, "- Level: " .. tostring(characterData.level or "unknown"))
@@ -1101,14 +1150,103 @@ function ns.BuildAIReport(snapshot)
     end
     append(lines, "")
     append(lines, "---")
-    append(lines, "Generated by HammerLink " .. tostring(ns.VERSION or "unknown") .. ". The addon did not upload this report.")
+    append(lines, "Generated by HammerLink " .. tostring(snapshot.addonVersion or ns.VERSION or "unknown") .. ". The addon did not upload this report.")
     return table.concat(lines, "\n")
 end
 
-function ns.BuildExport(snapshot)
+function ns.BuildExport(snapshot, checkpoint)
     snapshot = snapshot or ns.BuildSnapshot()
-    local json = encode(snapshot)
-    local compressed = LibDeflate:CompressDeflate(json, { level = 9 })
+    -- Trim this generated export without changing the chooser's capture.
+    if snapshot.achievements then
+        local copy = {}
+        for key, value in pairs(snapshot) do copy[key] = value end
+        snapshot = copy
+        local source = snapshot.achievements
+        local achievementCopy = {}
+        for key, value in pairs(source) do achievementCopy[key] = value end
+        achievementCopy.entries, achievementCopy.summary, achievementCopy.truncationReasons = {}, {}, {}
+        for index, entry in ipairs(source.entries) do achievementCopy.entries[index] = entry end
+        for key, value in pairs(source.summary) do achievementCopy.summary[key] = value end
+        for key, value in pairs(source.truncationReasons) do achievementCopy.truncationReasons[key] = value end
+        snapshot.achievements = achievementCopy
+    end
+    if checkpoint then checkpoint("serializing") end
+    local json = encode(snapshot, checkpoint)
+    local trimmed = 0
+    local achievements = snapshot.achievements
+    -- The importer bounds both decompressed bytes and encoded length. Remove
+    -- whole records, retaining coverage metadata and explicit incomplete states.
+    local function trimAchievements()
+        if not achievements or #achievements.entries == 0 then return false end
+        local count = math.max(1, math.ceil(#achievements.entries / 10))
+        for _ = 1, count do table.remove(achievements.entries) trimmed = trimmed + 1 end
+        achievements.truncated = true
+        achievements.truncationReasons.payload_size_limit = true
+        achievements.summary.omittedForPayloadSize = trimmed
+        ns.SummarizeAchievements(achievements)
+        if checkpoint then checkpoint("serializing") end
+        json = encode(snapshot, checkpoint)
+        return true
+    end
+    while #json > MAX_DECOMPRESSED_BYTES do
+        assert(trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
+    end
+    if checkpoint then checkpoint("compressing", 0, #json) end
+    local compressed = LibDeflate:CompressDeflate(json, { level = 3, checkpoint = checkpoint })
     assert(compressed, "could not compress export")
-    return ns.PREFIX .. LibDeflate:EncodeForPrint(compressed), #json, snapshot
+    if checkpoint then checkpoint("encoding", 0, #compressed) end
+    local printable = LibDeflate:EncodeForPrint(compressed, checkpoint)
+    while #printable > MAX_ENCODED_LENGTH do
+        assert(trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
+        if checkpoint then checkpoint("compressing", 0, #json) end
+        compressed = LibDeflate:CompressDeflate(json, { level = 3, checkpoint = checkpoint })
+        assert(compressed, "could not compress export")
+        if checkpoint then checkpoint("encoding", 0, #compressed) end
+        printable = LibDeflate:EncodeForPrint(compressed, checkpoint)
+    end
+    return ns.PREFIX .. printable, #json, snapshot
+end
+
+-- coroutine.resume catches errors without putting yields across a Lua 5.1
+-- pcall boundary. Each resume gets its own 4 ms budget and a later frame.
+function ns.BuildExportAsync(snapshot, callback, progress)
+    local cancelled = false
+    local clock = debugprofilestop or function() return GetTime() * 1000 end
+    local started, checks = 0, 0
+    local phase, position, total = "serializing", 0, nil
+    local function checkpoint(newPhase, newPosition, newTotal)
+        if newPhase then
+            if phase ~= newPhase then position, total = 0, nil end
+            phase = newPhase
+            position = newPosition or position
+            total = newTotal or total
+        end
+        checks = checks + 1
+        if checks % 32 == 0 and (clock() - started >= 4 or checks >= 16384) then coroutine.yield() end
+    end
+    local task = coroutine.create(function()
+        local captured = snapshot
+        snapshot = nil
+        return ns.BuildExport(captured, checkpoint)
+    end)
+    local function step()
+        if cancelled then return end
+        started = clock()
+        checks = 0
+        local ok, code, bytes, exported = coroutine.resume(task)
+        if not ok or coroutine.status(task) == "dead" then
+            task = nil
+            local done = callback
+            callback, progress = nil, nil
+            if ok then done(code, bytes, exported) else done(nil, nil, nil, tostring(code)) end
+        else
+            if progress then progress(phase, position, total) end
+            C_Timer.After(0, step)
+        end
+    end
+    C_Timer.After(0, step)
+    return function()
+        cancelled = true
+        task, snapshot, callback, progress = nil, nil, nil, nil
+    end
 end

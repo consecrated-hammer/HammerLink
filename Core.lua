@@ -20,6 +20,7 @@ local DEFAULT_OPTIONS = {
     decorInventory = true,
     questLog = true,
     professionRecipes = true,
+    achievements = false,
 }
 
 function ns.IsForeverClient()
@@ -43,6 +44,7 @@ function ns.GetExportOptions()
 end
 
 function ns.IsExportEnabled(category)
+    if category == "achievements" then return ns.GetExportOptions()[category] == true end
     return ns.IsExportSupported(category) and ns.GetExportOptions()[category] ~= false
 end
 

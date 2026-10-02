@@ -56,11 +56,58 @@ local function createDialog()
     close:SetPoint("BOTTOM", 0, 14)
     close:SetText("Close")
     close:SetScript("OnClick", function() f:Hide() end)
+
+    -- WoW stops drawing a scrolling EditBox reliably once it holds a very
+    -- large report, and Ctrl+A then jumps to the undrawn end. Large output
+    -- goes in a copy box whose text is invisible, under a short preview, so
+    -- one Ctrl+C still copies everything. The box must sit in a ScrollFrame:
+    -- unclipped, megabytes of text drawn past the dialog blanked the whole UI.
+    local preview = f:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
+    preview:SetPoint("TOPLEFT", 33, -86)
+    preview:SetPoint("BOTTOMRIGHT", -33, 56)
+    preview:SetJustifyH("LEFT")
+    preview:SetJustifyV("TOP")
+    preview:SetWordWrap(true)
+    preview:SetMaxLines(13)
+    local copyScroll = CreateFrame("ScrollFrame", nil, f)
+    copyScroll:SetPoint("TOPLEFT", 25, -78)
+    copyScroll:SetPoint("BOTTOMRIGHT", -25, 48)
+    local copyBox = CreateFrame("EditBox", nil, copyScroll)
+    copyBox:SetWidth(700)
+    copyBox:SetHeight(230)
+    copyScroll:SetScrollChild(copyBox)
+    copyBox:SetMultiLine(true)
+    copyBox:SetAutoFocus(false)
+    copyBox:SetFontObject("ChatFontNormal")
+    copyBox:SetTextColor(0, 0, 0, 0)
+    copyBox:SetHighlightColor(0, 0, 0, 0)
+    copyBox:SetScript("OnEscapePressed", function() f:Hide() end)
+    copyBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    copyBox:SetScript("OnTextChanged", function(self, userInput)
+        if userInput then
+            self:SetText(f.output or "")
+            self:HighlightText()
+        end
+    end)
+    f.preview, f.copyBox, f.copyScroll = preview, copyBox, copyScroll
     return f
+end
+
+local LARGE_OUTPUT_CHARACTERS = 100000
+
+local function previewText(output, format)
+    if format ~= "ai" then return output:sub(1, 600) .. "..." end
+    local lines = {}
+    for line in output:gmatch("[^\n]+") do
+        lines[#lines + 1] = line
+        if #lines == 12 then break end
+    end
+    return table.concat(lines, "\n") .. "\n..."
 end
 
 local function showOutput(output, snapshot, format)
     dialog = dialog or createDialog()
+    local kilobytes = string.format("%.0f KB", #output / 1024)
     if format == "ai" then
         dialog.title:SetText("AI-readable HammerLink report")
         dialog.help:SetText("Copy this Markdown report into ChatGPT, Claude or another AI. Review it before sharing: it contains the selected character data.")
@@ -70,12 +117,32 @@ local function showOutput(output, snapshot, format)
         dialog.help:SetText("Copy this code into Consecrated Hammer. It is local data: nothing is uploaded by the addon.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete code")
     end
-    dialog.box:SetText(output)
-    if dialog.scroll.UpdateScrollChildRect then dialog.scroll:UpdateScrollChildRect() end
-    dialog.scroll:SetVerticalScroll(0)
+    local large = #output > LARGE_OUTPUT_CHARACTERS
+    dialog.output = output
+    dialog.scroll:SetShown(not large)
+    dialog.preview:SetShown(large)
+    dialog.copyScroll:SetShown(large)
     dialog:Show()
-    dialog.box:SetFocus()
-    dialog.box:HighlightText()
+    if large then
+        dialog.box:SetText("")
+        dialog.preview:SetText(previewText(output, format))
+        dialog.copyHint:SetText("All " .. kilobytes .. " is selected. Press Ctrl+C to copy it, then paste it in one go")
+        dialog.copyBox:SetText(output)
+        dialog.copyBox:SetFocus()
+        dialog.copyBox:HighlightText()
+        dialog.copyScroll:SetVerticalScroll(0)
+    else
+        dialog.copyBox:SetText("")
+        dialog.box:SetText(output)
+        dialog.box:SetFocus()
+        dialog.box:HighlightText()
+        local function refreshScroll()
+            if dialog.scroll.UpdateScrollChildRect then dialog.scroll:UpdateScrollChildRect() end
+            dialog.scroll:SetVerticalScroll(0)
+        end
+        refreshScroll()
+        if C_Timer and C_Timer.After then C_Timer.After(0, refreshScroll) end
+    end
     if format == "ai" then
         ns.Print(("AI-readable report ready — %d characters"):format(#output))
     else
@@ -96,6 +163,7 @@ local exportCategories = {
     { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05", detail = "Owned Housing Catalog decor, including stored and placed counts." },
     { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01", detail = "Active quests, objective progress, quest types and available waypoints." },
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
+    { key = "achievements", title = "Achievements (optional)", icon = "Interface\\Icons\\Achievement_General", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
 }
 
 local function visibleExportCategories()
@@ -189,7 +257,9 @@ local function refreshChooser(f)
         local info = ns.GetExportCategoryInfo(f.snapshot, category.key, f.format == "ai")
         local row = f.rows[category.key]
         row.check:SetChecked(checked)
-        if info.unavailable then
+        if category.key == "achievements" and f.achievementLoading then
+            row.count:SetText("|cffaaaaaaCollecting...|r")
+        elseif info.unavailable then
             row.count:SetText("|cffaaaaaaUnavailable|r")
         else
             row.count:SetText("|cffaaaaaa" .. recordCountText(info.count) .. "|r")
@@ -218,6 +288,124 @@ local function refreshChooser(f)
         footer = footer .. " · compressed when generated"
     end
     f.summary:SetText(footer)
+    if f.achievementLoading or f.generating then
+        f.generate:Disable()
+    else
+        f.generate:Enable()
+    end
+    if f.achievementLoading then
+        f.generate:SetText("Collecting...")
+        f.exportWarning:SetText("|cffffc44dCollecting achievements|r ("
+            .. recordCountText(f.achievementProgress or 0) .. " so far).")
+    elseif not f.generating then
+        f.generate:SetText("Generate export")
+        f.exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
+    end
+    f.exportWarning:SetShown(f.generating or ns.IsExportEnabled("achievements"))
+    if f.achievementScope then
+        local options = ns.GetAchievementOptions()
+        UIDropDownMenu_SetSelectedValue(f.achievementScope, options.scope)
+        UIDropDownMenu_SetText(f.achievementScope, f.achievementLabels[options.scope])
+        local needsCategories = options.scope == "selected" or options.scope == "currentExpansion"
+        f.achievementCategories:SetShown(needsCategories)
+        f.achievementHint:SetText(options.scope == "currentExpansion"
+            and "Choose this client's current expansion categories. Descendants are included."
+            or "Missing achievements remain unknown. Incomplete criteria are included.")
+    end
+end
+
+local function collectAchievements(f)
+    if f.cancelAchievements then f.cancelAchievements() f.cancelAchievements = nil end
+    f.achievementLoading = false
+    f.snapshot.achievements = nil
+    f.snapshot.exportOptions.achievements = ns.IsExportEnabled("achievements")
+    if not ns.IsExportEnabled("achievements") then refreshChooser(f) return end
+    f.achievementLoading = true
+    f.achievementProgress = 0
+    refreshChooser(f)
+    f.cancelAchievements = ns.CollectAchievements(function(value, err)
+        f.achievementLoading = false
+        f.snapshot.achievements = value
+        if err then ns.Print("Could not collect achievements: " .. err) end
+        refreshChooser(f)
+    end, function(count)
+        f.achievementProgress = count
+        f.exportWarning:SetText("|cffffc44dCollecting achievements|r ("
+            .. recordCountText(count or 0) .. " so far).")
+    end)
+end
+
+local function showAchievementCategoryPicker(f)
+    local picker = f.achievementPicker
+    if not picker then
+        picker = CreateFrame("Frame", "HammerLinkAchievementCategories", f, "BackdropTemplate")
+        picker:SetSize(540, 470)
+        picker:SetPoint("CENTER")
+        picker:SetFrameStrata("FULLSCREEN_DIALOG")
+        picker:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
+        local title = picker:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        title:SetPoint("TOP", 0, -22)
+        title:SetText("Choose achievement categories and their descendants")
+        local search = CreateFrame("EditBox", nil, picker, "InputBoxTemplate")
+        search:SetSize(450, 24)
+        search:SetPoint("TOPLEFT", 38, -53)
+        search:SetAutoFocus(false)
+        search:SetScript("OnEscapePressed", function() picker:Hide() end)
+        local scroll = CreateFrame("ScrollFrame", nil, picker, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 25, -90)
+        scroll:SetPoint("BOTTOMRIGHT", -46, 52)
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetSize(460, 300)
+        scroll:SetScrollChild(content)
+        picker.rows = {}
+        local function refresh()
+            local query = (search:GetText() or ""):lower()
+            local options = ns.GetAchievementOptions()
+            local ids = options.scope == "currentExpansion" and options.expansionCategoryIDs or options.categoryIDs
+            local selected = {}
+            for _, id in ipairs(ids) do selected[id] = true end
+            local visible = 0
+            for _, category in ipairs(picker.categories) do
+                local label = (category.name or "Unavailable category") .. " [" .. category.id .. "]"
+                if query == "" or label:lower():find(query, 1, true) then
+                    visible = visible + 1
+                    local row = picker.rows[visible]
+                    if not row then
+                        row = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+                        row:SetSize(28, 28)
+                        row:SetPoint("TOPLEFT", 0, -(visible - 1) * 30)
+                        row.Text:SetWidth(410)
+                        row.Text:SetJustifyH("LEFT")
+                        row:SetScript("OnClick", function(self)
+                            ns.ToggleAchievementCategory(self.categoryID)
+                            refresh()
+                        end)
+                        picker.rows[visible] = row
+                    end
+                    row.categoryID = category.id
+                    row.Text:SetText(label)
+                    row:SetChecked(selected[category.id] == true)
+                    row:Show()
+                end
+            end
+            for index = visible + 1, #picker.rows do picker.rows[index]:Hide() end
+            content:SetHeight(math.max(300, visible * 30))
+            if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
+        end
+        search:SetScript("OnTextChanged", function() scroll:SetVerticalScroll(0) refresh() end)
+        local done = CreateFrame("Button", nil, picker, "UIPanelButtonTemplate")
+        done:SetSize(100, 24)
+        done:SetPoint("BOTTOM", 0, 20)
+        done:SetText("Done")
+        done:SetScript("OnClick", function() picker:Hide() end)
+        picker:SetScript("OnHide", function() collectAchievements(f) end)
+        picker.search, picker.refresh = search, refresh
+        f.achievementPicker = picker
+    end
+    picker.categories = ns.GetAchievementCategories()
+    picker.search:SetText("")
+    picker.refresh()
+    picker:Show()
 end
 
 local function setFormat(f, format)
@@ -279,10 +467,10 @@ local function createChooserDialog()
 
     local categoryScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
     categoryScroll:SetPoint("TOPLEFT", 24, -153)
-    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 77)
+    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 105)
     local categoryContent = CreateFrame("Frame", nil, categoryScroll)
     f.categories = visibleExportCategories()
-    categoryContent:SetSize(510, math.max(410, #f.categories * 45))
+    categoryContent:SetSize(510, math.max(410, #f.categories * 45 + 115))
     categoryScroll:SetScrollChild(categoryContent)
     f.categoryScroll = categoryScroll
     f.categoryContent = categoryContent
@@ -322,10 +510,44 @@ local function createChooserDialog()
         end
         check:SetScript("OnClick", function(self)
             ns.db.options[category.key] = self:GetChecked() and true or false
-            refreshChooser(f)
+            if category.key == "achievements" then collectAchievements(f) else refreshChooser(f) end
         end)
         f.rows[category.key] = { check = check, icon = categoryIcon, detail = detail, count = count, warning = warning, actionNotice = actionNotice }
     end
+
+    local scope = CreateFrame("Frame", "HammerLinkAchievementScope", categoryContent, "UIDropDownMenuTemplate")
+    scope:SetPoint("TOPLEFT", 35, -#f.categories * 45 - 2)
+    UIDropDownMenu_SetWidth(scope, 230)
+    local scopeOptions = {
+        { value = "dungeons", text = "Dungeons & Raids" },
+        { value = "all", text = "All discoverable achievements" },
+        { value = "currentExpansion", text = "Current expansion" },
+        { value = "incomplete", text = "Incomplete achievements only" },
+        { value = "selected", text = "Selected categories" },
+    }
+    f.achievementLabels = {}
+    for _, option in ipairs(scopeOptions) do f.achievementLabels[option.value] = option.text end
+    UIDropDownMenu_Initialize(scope, function()
+        for _, option in ipairs(scopeOptions) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text, info.value = option.text, option.value
+            info.checked = ns.GetAchievementOptions().scope == option.value
+            info.func = function() ns.SetAchievementScope(option.value) collectAchievements(f) end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    f.achievementScope = scope
+    local chooseCategories = CreateFrame("Button", nil, categoryContent, "UIPanelButtonTemplate")
+    chooseCategories:SetSize(150, 24)
+    chooseCategories:SetPoint("LEFT", scope, "RIGHT", 0, 0)
+    chooseCategories:SetText("Choose categories")
+    chooseCategories:SetScript("OnClick", function() showAchievementCategoryPicker(f) end)
+    f.achievementCategories = chooseCategories
+    local hint = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    hint:SetPoint("TOPLEFT", 62, -#f.categories * 45 - 43)
+    hint:SetWidth(425)
+    hint:SetJustifyH("LEFT")
+    f.achievementHint = hint
 
     local summary = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     summary:SetPoint("BOTTOMLEFT", 30, 62)
@@ -333,13 +555,21 @@ local function createChooserDialog()
     summary:SetJustifyH("LEFT")
     f.summary = summary
 
+    local exportWarning = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    exportWarning:SetPoint("BOTTOMLEFT", summary, "TOPLEFT", 0, 8)
+    exportWarning:SetWidth(550)
+    exportWarning:SetJustifyH("LEFT")
+    exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
+    f.exportWarning = exportWarning
+
     local reset = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     reset:SetSize(108, 24)
     reset:SetPoint("BOTTOMLEFT", 28, 23)
     reset:SetText("Enable all")
     reset:SetScript("OnClick", function()
         ns.ResetExportOptions()
-        refreshChooser(f)
+        ns.db.options.achievements = true
+        collectAchievements(f)
         ns.Print("all export categories enabled")
     end)
 
@@ -347,20 +577,54 @@ local function createChooserDialog()
     generate:SetSize(138, 24)
     generate:SetPoint("BOTTOMRIGHT", -124, 23)
     generate:SetText("Generate export")
+    f.generate = generate
+    local function finishGeneration()
+        f.generating = false
+        f.cancelExport = nil
+        generate:SetText("Generate export")
+        refreshChooser(f)
+    end
+    f:SetScript("OnHide", function()
+        if f.cancelExport then f.cancelExport() end
+        finishGeneration()
+    end)
     generate:SetScript("OnClick", function()
+        if f.generating then return end
+        if f.achievementLoading then ns.Print("Achievements are still being collected. Try again in a moment.") return end
+        if ns.IsExportEnabled("achievements") and not f.snapshot.achievements then
+            ns.Print("Achievements could not be collected. Retry or switch off achievements.") return
+        end
         local snapshot = selectedSnapshot(f)
-        local ok, output
+        local ok, output, _, exportedSnapshot
         if f.format == "ai" then
             ok, output = pcall(ns.BuildAIReport, snapshot)
         else
-            ok, output = pcall(ns.BuildExport, snapshot)
+            f.generating = true
+            generate:SetText("Generating...")
+            generate:Disable()
+            local generationStarted = GetTime()
+            f.exportWarning:SetText("Generating: preparing data...")
+            f.exportWarning:Show()
+            f.cancelExport = ns.BuildExportAsync(snapshot, function(code, bytes, exported, err)
+                finishGeneration()
+                if err then ns.Print("Export failed: " .. tostring(err)) return end
+                f:Hide()
+                showOutput(code, exported, "compact")
+            end, function(phase, position, total)
+                local labels = { serializing = "preparing data", compressing = "compressing", encoding = "encoding" }
+                local percent = total and math.floor(100 * position / math.max(1, total))
+                local elapsed = math.floor(GetTime() - generationStarted)
+                f.exportWarning:SetText("Generating: " .. (labels[phase] or phase)
+                    .. (percent and (" " .. percent .. "%") or "") .. " (" .. elapsed .. "s elapsed).")
+            end)
+            return
         end
         if not ok then
             ns.Print("Export failed: " .. tostring(output))
             return
         end
         f:Hide()
-        showOutput(output, snapshot, f.format)
+        showOutput(output, exportedSnapshot or snapshot, f.format)
     end)
 
     local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -378,8 +642,12 @@ function ns.ShowExport()
         return
     end
     chooserDialog = chooserDialog or createChooserDialog()
+    if chooserDialog.cancelExport then chooserDialog.cancelExport() end
+    chooserDialog.generating = false
+    chooserDialog.generate:SetText("Generate export")
+    chooserDialog.cancelExport = nil
     chooserDialog.snapshot = snapshot
     chooserDialog.format = ns.GetExportFormat()
-    refreshChooser(chooserDialog)
+    collectAchievements(chooserDialog)
     chooserDialog:Show()
 end

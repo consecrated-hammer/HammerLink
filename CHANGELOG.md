@@ -1,6 +1,50 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.0] - 2026-10-02
+
+### Added
+
+- Optional achievement exports in the AI report and compact code, with explicit
+  incomplete states, criteria progress, account and character completion,
+  dates, raw IDs, category ancestry and available flags.
+- Achievement scopes: Dungeons & Raids (initial scope), all discoverable,
+  incomplete only, selected categories and player-selected current-expansion
+  categories. Missing achievements remain unknown, never completed.
+- Batched achievement collection, coverage summaries, failed reads and explicit
+  truncation when collection or compact payload limits are reached.
+
+### Changed
+
+- Shorten achievements in the AI-readable report to about a sixth of their
+  previous size. Achievements are grouped under one category heading with one
+  line each, and criteria are listed only for achievements not yet complete.
+  The full criterion detail stays in the Consecrated Hammer code. The chooser
+  builds each report section once instead of on every refresh.
+
+- List an incomplete achievement's criteria on one line each for not done,
+  done and unknown, and show each failed achievement category once with a
+  count.
+
+- Disable Generate export while achievements are being collected or an export
+  is being generated, then enable it when the job finishes. While collecting,
+  the button reads "Collecting..." and the status line shows a running count.
+
+- Use faster level-3 compression for compact exports, resume without an added
+  timer delay, and show the generation phase, percentage and elapsed time.
+  Keep yielding even if the profiling clock stops advancing.
+
+- Generate compact exports across frames to avoid WoW's Lua execution timeout
+  on large achievement captures. Show a generation status and an achievement
+  timing warning above the record summary. Closing the chooser cancels generation.
+
+- Raised compact export limits to 32 MiB of JSON and 4 MiB of printable data,
+  matching wow-site so full achievement captures have room for their criteria.
+
+### Fixed
+
+- Large exports no longer open blank or vanish on select-all. Output over
+  100 KB shows a short preview while the whole export stays selected for a
+  single Ctrl+C.
 
 ## [0.9.0] - 2026-09-26
 

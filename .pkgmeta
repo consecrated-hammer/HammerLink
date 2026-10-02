@@ -12,6 +12,7 @@ ignore:
   - .gitignore
   - .pkgmeta
   - DEVELOPMENT.md
+  - docs
   - tools
   - tests
   - Copy-ToWoWAddons.local.ps1

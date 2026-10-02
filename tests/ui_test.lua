@@ -32,6 +32,8 @@ local function widget(kind, name, template)
     function value:SetBackdrop() end
     function value:SetBackdropColor() end
     function value:SetMovable() end
+    function value:Enable() self.enabled = true end
+    function value:Disable() self.enabled = false end
     function value:EnableMouse() end
     function value:EnableKeyboard() end
     function value:RegisterForDrag() end
@@ -41,6 +43,10 @@ local function widget(kind, name, template)
     function value:SetFontObject() end
     function value:SetAlpha(alpha) self.alpha = alpha end
     function value:SetTextInsets() end
+    function value:SetTextColor() end
+    function value:SetHighlightColor() end
+    function value:SetWordWrap() end
+    function value:SetMaxLines() end
     function value:SetJustifyH(justification) self.justifyH = justification end
     function value:SetJustifyV(justification) self.justifyV = justification end
     function value:SetScrollChild(child) self.scrollChild = child end
@@ -54,7 +60,8 @@ local function widget(kind, name, template)
     function value:GetChecked() return self.checked end
     function value:SetScript(event, callback) self.scripts[event] = callback end
     function value:Show() self.shown = true end
-    function value:Hide() self.shown = false end
+    function value:Hide() self.shown = false if self.scripts.OnHide then self.scripts.OnHide() end end
+    function value:SetShown(shown) self.shown = shown end
     function value:LockHighlight() self.highlighted = true end
     function value:UnlockHighlight() self.highlighted = false end
     function value:CreateFontString()
@@ -106,7 +113,20 @@ function UIDropDownMenu_SetSelectedValue(frame, value) frame.selectedValue = val
 function UIDropDownMenu_SetText(frame, value) frame.dropdownText = value end
 
 function namespace.GetExportOptions() return namespace.db.options end
-function namespace.IsExportEnabled(category) return namespace.db.options[category] ~= false end
+function namespace.IsExportEnabled(category)
+    if category == "achievements" then return namespace.db.options[category] == true end
+    return namespace.db.options[category] ~= false
+end
+local achievementOptions = { scope = "dungeons", categoryIDs = {}, expansionCategoryIDs = {} }
+function namespace.GetAchievementOptions() return achievementOptions end
+function namespace.SetAchievementScope(scope) achievementOptions.scope = scope end
+function namespace.GetAchievementCategories() return {} end
+local achievementCollections = 0
+function namespace.CollectAchievements(callback)
+    achievementCollections = achievementCollections + 1
+    callback({ entries = { { achievementID = 1 } }, available = achievementOptions.scope ~= "all" })
+    return function() end
+end
 function namespace.GetExportFormat() return namespace.db.exportFormat or "ai" end
 function namespace.SetExportFormat(format)
     if format ~= "compact" and format ~= "ai" then return false end
@@ -126,7 +146,13 @@ function namespace.SelectSnapshot(snapshot, options)
     for _, category in ipairs(categories) do selected.exportOptions[category] = options[category] ~= false end
     return selected
 end
-function namespace.GetExportCategoryInfo(_, category)
+function namespace.GetExportCategoryInfo(snapshot, category)
+    if category == "achievements" then
+        local enabled = snapshot.exportOptions.achievements == true
+        local value = snapshot.achievements
+        return { count = value and #value.entries or 0, characters = enabled and 6000 or 0,
+            unavailable = enabled and (not value or value.available == false) }
+    end
     return {
         count = counts[category], unavailable = false,
         characters = category == "professionRecipes" and 12000 or 1000,
@@ -139,6 +165,14 @@ end
 function namespace.BuildExport(snapshot)
     namespace.lastCompact = snapshot
     return "HL1:test"
+end
+GetTime = function() return 20 end
+local pendingExport, pendingProgress
+function namespace.BuildExportAsync(snapshot, callback, progress)
+    namespace.asyncCalls = (namespace.asyncCalls or 0) + 1
+    pendingProgress = progress
+    pendingExport = function() callback(namespace.BuildExport(snapshot), 0, snapshot) end
+    return function() pendingExport = nil end
 end
 function namespace.FormatExportSummary() return "exported — test" end
 function namespace.Print(message) namespace.lastMessage = message end
@@ -208,18 +242,98 @@ for _, frame in ipairs(frames) do
     if frame.text == "Generate export" then generate = frame end
 end
 assert(generate, "expected Generate export button")
+assert(generate.enabled, "generation must be enabled when collection is ready")
 generate.scripts.OnClick()
 assert(namespace.lastAI and namespace.lastAI.exportOptions.bagItems == false, "expected selected AI snapshot")
 assert(HammerLinkExportFrame and HammerLinkExportFrame.box.text:find("# AI report", 1, true), "expected readable report in copy dialog")
 assert(HammerLinkExportFrame.box.highlightedText, "expected complete output to be selected for copying")
 assert(HammerLinkExportFrame.box.height == 250, "expected native multiline growth instead of a capped report height")
+local output = HammerLinkExportFrame
+assert(output.scroll.shown and not output.copyScroll.shown and not output.preview.shown, "small reports keep the scrolling view")
+assert(output.copyHint.text == "Press Ctrl+C to copy the complete report")
+local smallReport = namespace.BuildAIReport
+namespace.BuildAIReport = function(snapshot)
+    return "# Large report\n" .. string.rep("- achievement line\n", 8000)
+end
+namespace.ShowExport()
+generate.scripts.OnClick()
+assert(not output.scroll.shown and output.copyScroll.shown and output.preview.shown, "large reports use the copy box")
+assert(output.copyScroll.scrollChild == output.copyBox, "the copy box must be clipped by its scroll frame")
+assert(#output.copyBox.text > 100000 and output.copyBox.focused and output.copyBox.highlightedText, "the whole report is selected for one copy")
+assert(output.box.text == "" and output.preview.text:find("# Large report", 1, true))
+assert(output.copyHint.text:find("Ctrl+C", 1, true) and output.copyHint.text:find("KB", 1, true))
+output.copyBox.scripts.OnTextChanged(output.copyBox, true)
+assert(#output.copyBox.text > 100000, "typing cannot change the report")
+namespace.BuildAIReport = smallReport
 
 namespace.ShowExport()
 assert(chooser.shown and chooser.format == "ai", "expected reopening the chooser to retain the selected format")
 compactOption.func()
 generate.scripts.OnClick()
+assert(chooser.generating and generate.text == "Generating...", "generation must show busy state")
+assert(not generate.enabled, "generation must disable the button while exporting")
+pendingProgress("compressing", 250, 1000)
+assert(chooser.exportWarning.shown and chooser.exportWarning.text:find("compressing 25%", 1, true),
+    "busy status must show advancing phase and percentage")
+generate.scripts.OnClick()
+assert(namespace.asyncCalls == 1, "repeat clicks must not launch another job")
+pendingExport()
+assert(not chooser.generating, "completion must clear busy state")
+assert(generate.enabled, "completion must restore the button")
 assert(namespace.lastCompact and namespace.lastCompact.exportOptions.bagItems == false, "expected selected compact snapshot")
 assert(HammerLinkExportFrame.box.text == "HL1:test", "expected compact code in the same copy dialog")
 
 -- About is HammerCore's standard page; see addon_test.lua.
+assert(not chooser.exportWarning.shown, "warning must be hidden without achievements")
+assert(achievementCollections == 0, "opening the chooser must not scan optional achievements")
+assert(chooser.achievementScope.selectedValue == "dungeons", "default achievement scope is Dungeons & Raids")
+aiOption.func()
+local achievementCheck = chooser.rows.achievements.check
+local immediateCollection = namespace.CollectAchievements
+local completeCollection
+local reportProgress
+namespace.CollectAchievements = function(callback, progress)
+    reportProgress = progress
+    completeCollection = function() return immediateCollection(callback) end
+    return function() completeCollection = nil end
+end
+achievementCheck:SetChecked(true)
+achievementCheck.scripts.OnClick(achievementCheck)
+assert(chooser.achievementLoading and not generate.enabled, "collection must disable Generate export")
+assert(generate.text == "Collecting...", "the disabled button must say why")
+assert(chooser.exportWarning.shown and chooser.exportWarning.text:find("Collecting achievements", 1, true))
+reportProgress(1234)
+assert(chooser.exportWarning.text:find("L1234 records so far", 1, true), "collection shows a running count")
+completeCollection()
+assert(not chooser.achievementLoading and generate.enabled, "finished collection must enable Generate export")
+assert(generate.text == "Generate export" and chooser.exportWarning.text:find("about a minute", 1, true))
+achievementCheck:SetChecked(false)
+achievementCheck.scripts.OnClick(achievementCheck)
+namespace.CollectAchievements = immediateCollection
+achievementCollections = 0
+achievementCheck:SetChecked(true)
+achievementCheck.scripts.OnClick(achievementCheck)
+assert(chooser.exportWarning.shown and chooser.exportWarning.text:find("about a minute", 1, true))
+assert(chooser.exportWarning.point[2] == chooser.summary, "warning must sit above the record summary")
+assert(achievementCollections == 1 and chooser.snapshot.achievements, "checking achievements collects the selected scope")
+assert(chooser.rows.achievements.warning.shown and chooser.snapshot.exportOptions.achievements == true,
+    "achievement size warnings must use the collected snapshot's live selection")
+for _, option in ipairs(chooser.achievementScope.items) do if option.value == "all" then option.func() end end
+assert(chooser.rows.achievements.count.text:find("Unavailable", 1, true), "failed achievement scans must show unavailable, not zero records")
+for _, option in ipairs(chooser.achievementScope.items) do
+    if option.value == "currentExpansion" then option.func() end
+end
+assert(chooser.achievementCategories.shown and chooser.achievementHint.text:find("current expansion categories", 1, true))
+achievementCheck:SetChecked(false)
+achievementCheck.scripts.OnClick(achievementCheck)
+assert(not chooser.snapshot.achievements, "unchecking achievements discards the scan")
+assert(not chooser.exportWarning.shown, "warning must disappear when achievements are unchecked")
+compactOption.func()
+generate.scripts.OnClick()
+chooser:Hide()
+assert(not pendingExport and not chooser.generating, "closing cancels generation and clears busy state")
+namespace.ShowExport()
+generate.scripts.OnClick()
+namespace.ShowExport()
+assert(not pendingExport and not chooser.generating, "reopening discards an unfinished generation")
 print("HammerLink UI tests passed")

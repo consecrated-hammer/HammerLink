@@ -20,12 +20,12 @@ namespace.GetProfessionRecipes = function() return {
     professions = { { skillLineID = 755, professionID = 755, name = "Classic Jewelcrafting", recipes = { { recipeID = 1261659, name = "Ironforge Chandelier", learned = true } } } },
 } end
 
-LibStub = function()
+namespace.LibDeflate = (function()
     return {
         CompressDeflate = function(_, value) return value end,
         EncodeForPrint = function(_, value) return value end,
     }
-end
+end)()
 
 INVSLOT_HEAD = 1
 INVSLOT_NECK = 2
@@ -169,6 +169,7 @@ function GetFlyoutSlotInfo(_, slot)
 end
 
 assert(loadfile("Export.lua"))("HammerLink", namespace)
+assert(namespace.BuildSnapshot().achievements == nil, "achievements must remain opt-in")
 local snapshot = namespace.BuildSnapshot()
 assert(snapshot.client.projectID == 1 and snapshot.client.tocVersion == 120100,
     "expected client project and TOC provenance")
@@ -370,4 +371,167 @@ assert(unknownInfo.unavailable and unknownInfo.count == 0, "expected unavailable
 assert(unknownReport:find("Learned recipes and techniques: unavailable or unknown", 1, true), "expected unknown profession state in report scope")
 assert(unknownReport:find("uncached professions are unknown", 1, true), "expected unavailable reason in readable report")
 
+-- Exercise the optional collector through both serialization paths.
+function CreateFrame() return { RegisterEvent = function() end, SetScript = function() end } end
+namespace.db = { achievementOptions = { scope = "dungeons" } }
+namespace.PREFIX = "HL1:"
+function GetCategoryList() return { 168, 900 } end
+function GetCategoryInfo(id) if id == 168 then return "Dungeons & Raids", -1 end return "Test raids", 168 end
+function GetCategoryNumAchievements(id) return id == 900 and 1 or 0 end
+function GetAchievementInfo(id, index)
+    if index then id = 12345 end
+    return id, "Unfinished test raid", 10, false, nil, nil, nil, "Fixture", 131072, 1, "", false, false
+end
+function GetAchievementCategory() return 900 end
+function GetAchievementNumCriteria() return 1 end
+function GetAchievementCriteriaInfo() return "Missing boss", 0, false, 0, 1, nil, 0, 55, "0/1", 789 end
+assert(loadfile("Achievements.lua"))("HammerLink", namespace)
+exportOptions.achievements = true
+local achievementSnapshot = namespace.BuildSnapshot()
+assert(achievementSnapshot.format == 3 and achievementSnapshot.exportOptions.achievements == true)
+local achievementCode = namespace.BuildExport(achievementSnapshot)
+assert(achievementCode:find('"completed":false', 1, true) and achievementCode:find('"current":0', 1, true))
+assert(achievementCode:find('"criteriaID":789', 1, true) and achievementCode:find('"categoryID":900', 1, true))
+local achievementReport = namespace.BuildAIReport(achievementSnapshot)
+assert(achievementReport:find("## Achievements", 1, true) and achievementReport:find("HammerLink format version: 3", 1, true))
+assert(achievementReport:find("**incomplete**", 1, true))
+assert(namespace.GetExportCategoryInfo(achievementSnapshot, "achievements").count == 1)
+local renderAchievements, renders = namespace.AchievementReport, 0
+namespace.AchievementReport = function(value) renders = renders + 1 return renderAchievements(value) end
+local cachedSnapshot = namespace.SelectSnapshot(achievementSnapshot, { achievements = true })
+cachedSnapshot.achievements = namespace.GetAchievements()
+namespace.GetExportCategoryInfo(cachedSnapshot, "achievements")
+namespace.GetExportCategoryInfo(cachedSnapshot, "achievements")
+assert(namespace.BuildAIReport(cachedSnapshot):find("Unfinished test raid", 1, true))
+assert(renders == 1, "chooser refreshes and Generate must reuse the rendered achievement section")
+namespace.AchievementReport = renderAchievements
+
+exportOptions.achievements = false
+assert(namespace.SelectSnapshot(achievementSnapshot).achievements == nil)
+assert(namespace.BuildCompleteSnapshot().achievements == nil, "chooser's general scan must not collect achievements")
+
+local largeSnapshot = namespace.SelectSnapshot(achievementSnapshot, { achievements = true })
+largeSnapshot.achievements = namespace.GetAchievements()
+largeSnapshot.achievements.entries = {}
+for id = 1, 5 do
+    largeSnapshot.achievements.entries[id] = { achievementID = id, name = string.rep("x", 200000),
+        completionState = "incomplete", completed = false, criteria = {} }
+end
+namespace.SummarizeAchievements(largeSnapshot.achievements)
+local fullCode, fullBytes, fullSnapshot = namespace.BuildExport(largeSnapshot)
+assert(fullBytes > 262144 and #fullCode > 262144)
+assert(#fullSnapshot.achievements.entries == 5 and not fullSnapshot.achievements.truncated,
+    "captures above the old printable limit must retain all records")
+for _, entry in ipairs(largeSnapshot.achievements.entries) do
+    entry.name = string.rep("x", 1024 * 1024)
+end
+local limitedCode, _, limitedSnapshot = namespace.BuildExport(largeSnapshot)
+assert(#limitedCode - 4 <= 4 * 1024 * 1024 and limitedSnapshot.achievements.truncated)
+assert(limitedSnapshot.achievements.summary.omittedForPayloadSize == 2 and limitedSnapshot.achievements.summary.exported == 3)
+assert(#largeSnapshot.achievements.entries == 5 and not largeSnapshot.achievements.truncated,
+    "size trimming must not mutate a captured snapshot")
+local tooLarge = { format = 3, character = { name = string.rep("x", 32 * 1024 * 1024 + 1) } }
+assert(not pcall(namespace.BuildExport, tooLarge), "oversized non-achievement data must fail clearly")
+
+-- Use the shipped compressor for a real HL1 round trip. Optionally keep a
+-- fixture artifact for the existing importer to decode outside this harness.
+LibStub = nil
+strmatch = string.match
+assert(loadfile("Libs/LibStub/LibStub.lua"))()
+namespace.LibDeflate = assert(loadfile("Libs/LibDeflate/LibDeflate.lua"))()
+assert(loadfile("Export.lua"))("HammerLink", namespace)
+local realCode = namespace.BuildExport(achievementSnapshot)
+local lib = namespace.LibDeflate
+local roundTrip = lib:DecompressDeflate(lib:DecodeForPrint(realCode:sub(5)))
+assert(roundTrip:find('"completed":false', 1, true) and roundTrip:find('"criteriaID":789', 1, true))
+local artifact = os.getenv("HL_TEST_ARTIFACT")
+if artifact then
+    local codeFile = assert(io.open(artifact .. ".hl1", "w")) codeFile:write(realCode) codeFile:close()
+    local reportFile = assert(io.open(artifact .. ".md", "w")) reportFile:write(achievementReport) reportFile:close()
+end
+-- Force checkpoints on every clock read to exercise Lua 5.1 yields inside
+-- JSON escaping, LZ77 searches, block cleanup and printable encoding.
+local jobs, clockTick = {}, 0
+C_Timer = { After = function(_, job) jobs[#jobs + 1] = job end }
+debugprofilestop = function() clockTick = clockTick + 5 return clockTick end
+local function drain()
+    local count = 0
+    while #jobs > 0 do
+        table.remove(jobs, 1)()
+        count = count + 1
+    end
+    return count
+end
+local large = { format = 3, character = { name = "Checkpoint test" }, entries = {} }
+for i = 1, 120 do
+    large.entries[i] = { id = i, completed = false, quantity = 0,
+        description = string.rep('quotes " slash \\ newline \n café ' .. tostring(i), 600) }
+end
+local expected = namespace.BuildExport(large)
+local completed
+local phases, advanced = {}, false
+namespace.BuildExportAsync(large, function(code, bytes, exported, err)
+    assert(not err and exported == large and bytes > 1024 * 1024)
+    completed = code
+end, function(phase, position, total)
+    phases[phase] = true
+    if phase == "compressing" and position > 0 and total > position then advanced = true end
+end)
+assert(not completed, "generation must start on a later timer")
+assert(drain() > 100, "large generation must yield repeatedly")
+assert(phases.serializing and phases.compressing and phases.encoding and advanced, "progress must cover all phases and advancing input")
+assert(completed == expected, "yielding must preserve the exact synchronous HL1 stream")
+assert(lib:DecompressDeflate(lib:DecodeForPrint(completed:sub(5))) ==
+    lib:DecompressDeflate(lib:DecodeForPrint(expected:sub(5))))
+
+-- A cached or reset profiling clock must still allow bounded cooperative work.
+debugprofilestop = function() return 0 end
+completed = nil
+namespace.BuildExportAsync(large, function(code, _, _, err) assert(not err) completed = code end)
+assert(drain() > 1 and completed == expected, "a flat profiling clock must not prevent yields or completion")
+debugprofilestop = function() clockTick = clockTick + 5 return clockTick end
+local called = false
+local cancel = namespace.BuildExportAsync(large, function() called = true end)
+cancel()
+drain()
+assert(not called, "cancel before start must discard the result")
+cancel = namespace.BuildExportAsync(large, function() called = true end)
+table.remove(jobs, 1)()
+assert(#jobs == 1, "first resume must schedule another frame")
+cancel()
+drain()
+assert(not called, "cancel during compression must discard the result")
+
+local compress = lib.CompressDeflate
+lib.CompressDeflate = function() error("compressor test failure") end
+local failure
+namespace.BuildExportAsync(large, function(code, _, _, err) assert(not code) failure = err end)
+drain()
+lib.CompressDeflate = compress
+assert(failure and failure:find("compressor test failure", 1, true), "resume errors must reach the UI")
+lib.CompressDeflate = function() error(nil) end
+failure = nil
+namespace.BuildExportAsync({ character = { name = "Error test" } }, function(_, _, _, err) failure = err end)
+drain()
+lib.CompressDeflate = compress
+assert(type(failure) == "string", "nil-valued errors must still be reported as failures")
+
+local captured = { character = { name = "Stable selection" }, exportOptions = { achievements = true },
+    achievements = achievementSnapshot.achievements }
+local chosen = namespace.SelectSnapshot(captured, { achievements = true })
+local chosenExpected = namespace.BuildExport(chosen)
+completed = nil
+namespace.BuildExportAsync(chosen, function(code, _, _, err) assert(not err) completed = code end)
+captured.achievements = nil
+captured.exportOptions.achievements = false
+drain()
+assert(completed == chosenExpected, "replacing the chooser capture must not change an unfinished export")
+assert(not LibStub:GetLibrary("LibDeflate", true), "private compressor must not register the shared library")
+local shared = LibStub:NewLibrary("LibDeflate", 999)
+shared.marker = "another addon"
+local isolated = {}
+assert(loadfile("Libs/LibDeflate/LibDeflate.lua"))("HammerLink", isolated)
+assert(isolated.LibDeflate ~= shared and LibStub("LibDeflate").marker == "another addon",
+    "a shared library loaded by another addon must remain independent")
+assert(isolated.LibDeflate:CompressDeflate("wire test", { level = 9 }) == lib:CompressDeflate("wire test", { level = 9 }))
 print("HammerLink export tests passed")

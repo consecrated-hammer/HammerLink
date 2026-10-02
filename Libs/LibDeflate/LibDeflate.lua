@@ -1,3 +1,6 @@
+-- HammerLink private fork of LibDeflate 1.0.2: per-call cooperative checkpoints.
+-- Upstream algorithm and wire format are unchanged; original licence follows.
+local _, addonNamespace = ...
 --[[--
 LibDeflate 1.0.2-release <br>
 Pure Lua compressor and decompressor with high compression ratio using
@@ -92,7 +95,7 @@ do
   local _VERSION = "1.0.2-release"
 
   -- When MAJOR is changed, I should name it as LibDeflate2
-  local _MAJOR = "LibDeflate"
+  local _MAJOR = "HammerLinkPrivateDeflate"
 
   -- Update this whenever a new version, for LibStub version registration.
   -- 0 : v0.x
@@ -105,21 +108,8 @@ do
                        " Copyright (C) 2018-2021 Haoqian He." ..
                        " Licensed under the zlib License"
 
-  -- Register in the World of Warcraft library "LibStub" if detected.
-  if LibStub then
-    local lib, minor = LibStub:GetLibrary(_MAJOR, true)
-    if lib and minor and minor >= _MINOR then -- No need to update.
-      return lib
-    else -- Update or first time register
-      LibDeflate = LibStub:NewLibrary(_MAJOR, _MINOR)
-      -- NOTE: It is important that new version has implemented
-      -- all exported APIs and tables in the old version,
-      -- so the old library is fully garbage collected,
-      -- and we 100% ensure the backward compatibility.
-    end
-  else -- "LibStub" is not detected.
-    LibDeflate = {}
-  end
+  LibDeflate = {}
+  if type(addonNamespace) == "table" then addonNamespace.LibDeflate = LibDeflate end
 
   LibDeflate._VERSION = _VERSION
   LibDeflate._MAJOR = _MAJOR
@@ -694,10 +684,12 @@ local function IsValidArguments(str, check_dictionary, dictionary,
     end
     if type_configs == "table" then
       for k, v in pairs(configs) do
-        if k ~= "level" and k ~= "strategy" then
+        if k ~= "level" and k ~= "strategy" and k ~= "checkpoint" then
           return false,
                  ("'configs' - unsupported table key in the configs: '%s'."):format(
                    k)
+        elseif k == "checkpoint" and type(v) ~= "function" then
+          return false, "checkpoint must be a function"
         elseif k == "level" and not _compression_level_configs[v] then
           return false,
                  ("'configs' - unsupported 'level': %s."):format(tostring(v))
@@ -1239,7 +1231,7 @@ end
 -- @return the extra bits of LZ77 distance deflate codes.
 -- @return the count of each LZ77 distance deflate code.
 local function GetBlockLZ77Result(level, string_table, hash_tables, block_start,
-                                  block_end, offset, dictionary)
+                                  block_end, offset, dictionary, checkpoint)
   local config = _compression_level_configs[level]
   local config_use_lazy, config_good_prev_length, config_max_lazy_match,
         config_nice_length, config_max_hash_chain = config[1], config[2],
@@ -1316,6 +1308,7 @@ local function GetBlockLZ77Result(level, string_table, hash_tables, block_start,
   -- I put them together, so it is a bit harder to understand.
   -- because I think this is easier for me to maintain it.
   while (index <= index_end) do
+    if checkpoint then checkpoint("compressing", index - 1) end
     local string_table_index = index - offset
     local offset_minus_three = offset - 3
     prev_len = cur_len
@@ -1360,6 +1353,7 @@ local function GetBlockLZ77Result(level, string_table, hash_tables, block_start,
       local string_table_index_plus_three = string_table_index + 3
 
       while chain_index >= 1 and depth > 0 do
+          if checkpoint then checkpoint() end
         local prev = cur_chain[chain_index]
 
         if index - prev > 32768 then break end
@@ -1762,6 +1756,7 @@ end
 -- calculating the block size of each block type and chooses the smallest one.
 local function Deflate(configs, WriteBits, WriteString, FlushWriter, str,
                        dictionary)
+  local checkpoint = configs and configs.checkpoint
   local string_table = {}
   local hash_tables = {}
   local is_last_block = nil
@@ -1790,6 +1785,7 @@ local function Deflate(configs, WriteBits, WriteString, FlushWriter, str,
   end
 
   while not is_last_block do
+    if checkpoint then checkpoint() end
     if not block_start then
       block_start = 1
       block_end = 64 * 1024 - 1
@@ -1846,7 +1842,7 @@ local function Deflate(configs, WriteBits, WriteString, FlushWriter, str,
       else
         lcodes, lextra_bits, lcodes_counts, dcodes, dextra_bits, dcodes_counts =
           GetBlockLZ77Result(level, string_table, hash_tables, block_start,
-                             block_end, offset, dictionary)
+                             block_end, offset, dictionary, checkpoint)
       end
 
       -- LuaFormatter off
@@ -1922,6 +1918,7 @@ local function Deflate(configs, WriteBits, WriteString, FlushWriter, str,
       end
 
       for k, t in pairs(hash_tables) do
+        if checkpoint then checkpoint() end
         local tSize = #t
         if tSize > 0 and block_end + 1 - t[1] > 32768 then
           if tSize == 1 then
@@ -3308,7 +3305,7 @@ local _6bit_to_byte = {
 -- left parenthese, or right parenthese)
 -- @param str [string] The string to be encoded.
 -- @return [string] The encoded string.
-function LibDeflate:EncodeForPrint(str)
+function LibDeflate:EncodeForPrint(str, checkpoint)
   if type(str) ~= "string" then
     error(("Usage: LibDeflate:EncodeForPrint(str):" ..
             " 'str' - string expected got '%s'."):format(type(str)), 2)
@@ -3319,6 +3316,7 @@ function LibDeflate:EncodeForPrint(str)
   local buffer = {}
   local buffer_size = 0
   while i <= strlenMinus2 do
+    if checkpoint then checkpoint("encoding", i - 1, strlen) end
     local x1, x2, x3 = string_byte(str, i, i + 2)
     i = i + 3
     local cache = x1 + x2 * 256 + x3 * 65536

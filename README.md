@@ -47,8 +47,25 @@ Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `st
 | Housing decor | Owned decor, with stored, placed and redeemable counts |
 | Current quest log | Objective progress, quest types, timers and map waypoints |
 | Learned recipes and techniques | Recipes, gathering techniques and bonuses, once you've opened that profession's window |
+| Achievements (optional) | Explicit complete/incomplete states, dates, category IDs and criteria progress |
 
 On WoW Forever, the Great Vault, Housing decor and currency categories aren't offered because Forever doesn't have them, and spec and item level are left out of the character details. The talent string is included when the client provides one.
+
+## Achievement planning
+
+Tick **Achievements** in the export chooser. It starts with **Dungeons & Raids**,
+including incomplete achievements and criteria. You can also choose all
+discoverable achievements, incomplete only, selected categories, or current
+expansion. For current expansion, choose that client's expansion categories;
+HammerLink records your exact selection rather than guessing an expansion.
+
+The export includes account and character completion separately, dates where
+available, criterion progress, active filters, counts and any failed reads or
+truncation. The AI-readable report puts each achievement on one line under its
+category and lists criteria only for unfinished ones. The `HL1:` code also keeps
+raw criterion IDs and flags. **An achievement missing from an export is
+unknown, never evidence that it is completed.** Hidden achievements may not be
+enumerable. HammerLink does not classify soloability or group requirements.
 
 ## The HL1 format
 
@@ -84,4 +101,4 @@ Stable tags use `vX.Y.Z`; `-alpha` and `-beta` suffixes select the matching
 CurseForge release channel. The numeric tag version must match
 `HammerLink.toc`, and its release date must match the changelog heading.
 
-Embedded libraries: LibStub (public domain) and LibDeflate 1.0.2 (zlib); their notices remain in `Libs/`.
+Embedded libraries: LibStub (public domain) and a private fork of LibDeflate 1.0.2 (zlib); their notices remain in `Libs/`. HammerLink adds per-call checkpoints to compression and printable encoding, without changing the HL1 wire format. Compact generation uses level-3 compression across frames, shows its phase and percentage, and can be cancelled by closing the chooser. With achievements enabled, allow about a minute for generation.
