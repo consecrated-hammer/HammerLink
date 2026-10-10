@@ -7,6 +7,24 @@ all client-exposed criteria. Collection yields every 100 API calls. Generate
 waits for it to finish. Opening the chooser with achievements off does not
 scan them. Changing scope replaces the scan.
 
+Category indices use the normal category count, matching Blizzard's UI; previous
+and next links collect additional progressive ranks. Unreadable category counts,
+category entries and achievement IDs get one retry after 250 ms, within the same
+API-call budget. `lookupDiagnostics` reports initial failures, recovered reads,
+remaining failures by type and category, and retries skipped for budget. Existing
+failure arrays and `summary.achievementFailures` describe unresolved reads.
+Criteria and category metadata failures are still reported without targeted retries.
+
+If achievement events arrive during the asynchronous scan, collection waits for
+500 ms without an update (at most two seconds), then replaces the result with
+one new scan. `collectionAttempts`, `changedOnInitialAttempt` and
+`collectionRequestedAt` retain that history; `changedDuringCollection` describes
+the final scan. Further changes remain flagged rather than causing another
+repeat. Cancellation also stops delayed retries and repeat scans. The chooser
+shows retry/refresh status and prints recovered/unresolved reads when finished.
+Legacy synchronous `GetAchievements` callers retry immediately and cannot wait
+for events or perform the delayed repeat.
+
 With achievements enabled, a note above the record summary warns that generating
 the export may take about a minute. Compact generation yields across frames
 during JSON serialization, compression and printable encoding. Closing or

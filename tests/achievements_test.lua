@@ -1,5 +1,6 @@
 local ns = { db = { options = {} } }
-function CreateFrame() return { RegisterEvent = function() end, SetScript = function() end } end
+local onAchievementEvent
+function CreateFrame() return { RegisterEvent = function() end, SetScript = function(_, _, fn) onAchievementEvent = fn end } end
 function time() return 1790900000 end
 local ticks = {}
 C_Timer = { After = function(_, callback) ticks[#ticks + 1] = callback end }
@@ -14,7 +15,7 @@ function GetCategoryList() return { 902, 900, 168, 81, 15234 } end
 function GetCategoryInfo(id) return unpack(categories[id] or {}) end
 local categoryAchievements = { [168] = { 10 }, [900] = { 20, 10 }, [81] = { 30 }, [15234] = { 40 } }
 function GetCategoryNumAchievements(id, includeAll)
-    assert(includeAll == true, "must request all category achievements")
+    assert(includeAll == nil, "indexed category enumeration must use the normal count")
     if id == 902 then error("category not ready") end
     return #(categoryAchievements[id] or {})
 end
@@ -96,6 +97,85 @@ assert(not ns.GetAchievements().available, "must not guess current expansion cat
 ns.ToggleAchievementCategory(900)
 result = ns.GetAchievements()
 assert(#result.entries == 4 and result.filters.expansionSelection == "player_selected_category_roots")
+
+-- includeAll totals can contain ranks that are not indexed category entries.
+local normalCount = GetCategoryNumAchievements
+GetCategoryNumAchievements = function(id, includeAll)
+    if includeAll then return normalCount(id) + 100 end
+    return normalCount(id)
+end
+result = ns.GetAchievements()
+assert(result.summary.achievementFailures == 0 and #result.entries == 4)
+GetCategoryNumAchievements = normalCount
+
+-- Retry category/index and by-ID misses in one delayed pass, preserving false.
+local normalInfo = GetAchievementInfo
+local indexMissed, idMissed = false, false
+GetAchievementInfo = function(id, index)
+    if id == 900 and index == 1 and not indexMissed then indexMissed = true return end
+    if id == 11 and not index and not idMissed then idMissed = true return end
+    return normalInfo(id, index)
+end
+result = ns.GetAchievements()
+assert(#result.entries == 4 and result.summary.achievementFailures == 0)
+assert(result.lookupDiagnostics.initialFailures == 2 and result.lookupDiagnostics.recovered == 2)
+assert(result.lookupDiagnostics.unresolved == 0 and result.entries[1].completed == false)
+GetAchievementInfo = function(id, index)
+    if id == 900 and index == 1 then return end
+    if id == 11 and not index then return end
+    return normalInfo(id, index)
+end
+result = ns.GetAchievements()
+assert(result.lookupDiagnostics.categoryIndexFailures == 1 and result.lookupDiagnostics.achievementIDFailures == 1)
+assert(result.summary.achievementFailures == 2 and #result.failedAchievements == 1)
+GetAchievementInfo = normalInfo
+
+-- Failed category counts are retried once, and remaining gaps have category totals.
+local countMissed = false
+GetCategoryNumAchievements = function(id)
+    if id == 900 and not countMissed then countMissed = true return end
+    return normalCount(id)
+end
+result = ns.GetAchievements()
+assert(#result.entries == 4 and result.lookupDiagnostics.recovered == 1)
+GetCategoryNumAchievements = function(id) if id == 900 then return end return normalCount(id) end
+result = ns.GetAchievements()
+assert(result.lookupDiagnostics.categoryCountFailures == 1)
+assert(result.lookupDiagnostics.categories[1].categoryID == 900)
+GetCategoryNumAchievements = normalCount
+
+-- Cancelling during the delayed retry does not publish an incomplete result.
+GetAchievementInfo = function() return end
+local retryResult, retryPhase
+local cancelRetry = ns.CollectAchievements(function(v) retryResult = v end,
+    function(_, phase) retryPhase = phase end)
+assert(retryPhase == "retrying" and #ticks > 0)
+cancelRetry()
+while #ticks > 0 do table.remove(ticks, 1)() end
+assert(not retryResult)
+GetAchievementInfo = normalInfo
+
+-- A changed asynchronous scan is replaced once. Repeated events cannot loop.
+local function asyncResult()
+    local value
+    ns.CollectAchievements(function(v) value = v end)
+    while #ticks > 0 do table.remove(ticks, 1)() end
+    return assert(value)
+end
+local fired = false
+GetAchievementInfo = function(id, index)
+    if not fired then fired = true onAchievementEvent(nil, "CRITERIA_UPDATE") end
+    return normalInfo(id, index)
+end
+result = asyncResult()
+assert(result.collectionAttempts == 2 and result.changedOnInitialAttempt and not result.changedDuringCollection)
+GetAchievementInfo = function(id, index)
+    onAchievementEvent(nil, "CRITERIA_UPDATE")
+    return normalInfo(id, index)
+end
+result = asyncResult()
+assert(result.collectionAttempts == 2 and result.changedDuringCollection)
+GetAchievementInfo = normalInfo
 
 local previousCriteria = GetAchievementCriteriaInfo
 GetAchievementCriteriaInfo = function(_, index) if index == 1 then error("not ready") end return previousCriteria(nil, index, true) end

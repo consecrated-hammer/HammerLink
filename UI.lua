@@ -327,10 +327,22 @@ local function collectAchievements(f)
         f.achievementLoading = false
         f.snapshot.achievements = value
         if err then ns.Print("Could not collect achievements: " .. err) end
+        if value and value.lookupDiagnostics then
+            local reads = value.lookupDiagnostics
+            if reads.initialFailures > 0 or reads.unresolved > 0 then
+                ns.Print("Achievement reads: " .. reads.recovered .. " recovered after retry; "
+                    .. reads.unresolved .. " unresolved. Missing achievements remain unknown.")
+            end
+            if value.changedDuringCollection then
+                ns.Print("Achievements changed again during the repeat scan. Exported states may reflect different moments; collect again when updates settle.")
+            end
+        end
         refreshChooser(f)
-    end, function(count)
+    end, function(count, phase)
         f.achievementProgress = count
-        f.exportWarning:SetText("|cffffc44dCollecting achievements|r ("
+        local label = phase == "retrying" and "Retrying achievement reads"
+            or (phase == "refreshing" and "Refreshing after achievement updates" or "Collecting achievements")
+        f.exportWarning:SetText("|cffffc44d" .. label .. "|r ("
             .. recordCountText(count or 0) .. " so far).")
     end)
 end

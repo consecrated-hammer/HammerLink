@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.10.1] - 2026-10-10
+
+### Changed
+
+- Enumerate indexed achievement category entries using the normal category count,
+  then follow previous and next rank links. Retry failed achievement, category
+  entry and category count reads once, with recovery and unresolved diagnostics.
+- Repeat asynchronous collection once if achievement updates arrive during the
+  scan. Show retry and refresh phases; missing records remain unknown.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added

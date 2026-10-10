@@ -164,6 +164,39 @@ local function collector(options)
             result.failedCategories[#result.failedCategories + 1] = { categoryID = root, reason = "scope_root_unavailable" }
         end
     end
+    local diagnostics = { initialFailures = 0, recovered = 0, unresolved = 0,
+        categoryIndexFailures = 0, achievementIDFailures = 0, categoryCountFailures = 0,
+        retriesSkippedForBudget = 0 }
+    result.lookupDiagnostics = diagnostics
+    local pending, retrying, failureCategories = {}, false, {}
+    local function failure(kind, categoryID, id, index)
+        if not retrying then
+            diagnostics.initialFailures = diagnostics.initialFailures + 1
+            pending[#pending + 1] = { kind = kind, categoryID = categoryID, id = id, index = index }
+            return
+        end
+        diagnostics.unresolved = diagnostics.unresolved + 1
+        diagnostics[kind] = diagnostics[kind] + 1
+        local category = failureCategories[categoryID]
+        if not category then
+            category = { categoryID = categoryID, categoryIndexFailures = 0,
+                achievementIDFailures = 0, categoryCountFailures = 0 }
+            failureCategories[categoryID] = category
+        end
+        category[kind] = category[kind] + 1
+        if kind == "achievementIDFailures" then
+            result.summary.achievementFailures = result.summary.achievementFailures + 1
+            if #result.failedAchievements < 256 then result.failedAchievements[#result.failedAchievements + 1] = id end
+        else
+            if kind == "categoryIndexFailures" then
+                result.summary.achievementFailures = result.summary.achievementFailures + 1
+            end
+            if #result.failedCategories < LIMITS.categories then
+                result.failedCategories[#result.failedCategories + 1] = { categoryID = categoryID,
+                    index = index, reason = kind == "categoryIndexFailures" and "achievement_lookup_failed" or "enumeration_failed" }
+            end
+        end
+    end
     local seen, criteriaTotal = {}, 0
     local function flag(flags, mask)
         if flags and number(mask) and mask > 0 then return flags % (mask * 2) >= mask end
@@ -174,8 +207,7 @@ local function collector(options)
         if #result.entries >= LIMITS.achievements then truncate("achievement_limit") return end
         local ok, actualID, name, _, completed, month, day, year, description, flags, _, _, isGuild, earnedByMe, _, isStatistic = call(GetAchievementInfo, id)
         if not ok or not number(actualID) or not text(name) then
-            result.summary.achievementFailures = result.summary.achievementFailures + 1
-            if #result.failedAchievements < 256 then result.failedAchievements[#result.failedAchievements + 1] = id end
+            failure("achievementIDFailures", fallbackCategory, id)
             return
         end
         if boolean(isGuild) == true or boolean(isStatistic) == true then return end
@@ -241,6 +273,47 @@ local function collector(options)
         end
         result.entries[#result.entries + 1] = entry
     end
+    local function discover(id, categoryID)
+        local queue, queued = { id }, { [id] = true }
+        local cursor = 1
+        while cursor <= #queue and cursor <= LIMITS.achievements and calls < LIMITS.calls do
+            local current = queue[cursor]
+            cursor = cursor + 1
+            if not seen[current] then
+                addAchievement(current, categoryID)
+                for _, getter in ipairs({ GetPreviousAchievement or false, GetNextAchievement or false }) do
+                    local linked, nextID = call(getter, current)
+                    if linked and number(nextID) and nextID > 0 and not queued[nextID] then
+                        queued[nextID] = true queue[#queue + 1] = nextID
+                    end
+                end
+            end
+        end
+        if cursor <= #queue then truncate("chain_limit") end
+    end
+    local function readIndex(categoryID, index)
+        local got, id = call(GetAchievementInfo, categoryID, index)
+        if got and number(id) and id > 0 then
+            discover(id, categoryID)
+        else
+            failure("categoryIndexFailures", categoryID, nil, index)
+        end
+    end
+    local function enumerate(categoryID)
+        -- Indexed entries use the normal category count. Additional progressive
+        -- ranks are discovered through previous/next links, not extra indices.
+        local ok, count = call(GetCategoryNumAchievements, categoryID)
+        if not ok or not number(count) then
+            failure("categoryCountFailures", categoryID)
+            return
+        end
+        result.available = true
+        for index = 1, math.min(count, LIMITS.achievements) do
+            if calls >= LIMITS.calls then truncate("api_call_limit") break end
+            readIndex(categoryID, index)
+        end
+        if count > LIMITS.achievements then truncate("category_achievement_limit") end
+    end
     for _, category in ipairs(categories) do
         if calls >= LIMITS.calls then truncate("api_call_limit") break end
         local path, pathComplete = ancestry(category.id)
@@ -250,45 +323,37 @@ local function collector(options)
         if category.name and not pathComplete then
             result.failedCategories[#result.failedCategories + 1] = { categoryID = category.id, reason = "ancestry_unavailable" }
         end
-        if category.name and inScope(path) then
-            -- includeAll includes progressive achievements; also walk links to
-            -- recover ranks a client exposes only via previous/next references.
-            local ok, count = call(GetCategoryNumAchievements, category.id, true)
-            if not ok or not number(count) then
-                result.failedCategories[#result.failedCategories + 1] = { categoryID = category.id, reason = "enumeration_failed" }
+        if category.name and inScope(path) then enumerate(category.id) end
+    end
+    if #pending > 0 then
+        coroutine.yield(#result.entries, 0.25, "retrying")
+        retrying = true
+        for retryIndex, failed in ipairs(pending) do
+            if retryIndex % 100 == 0 then coroutine.yield(#result.entries, 0, "retrying") end
+            if calls >= LIMITS.calls then
+                diagnostics.retriesSkippedForBudget = diagnostics.retriesSkippedForBudget + 1
+                -- Preserve unresolved evidence without issuing more API calls.
+                failure(failed.kind, failed.categoryID, failed.id, failed.index)
+                truncate("api_call_limit")
             else
-                result.available = true
-                for index = 1, math.min(count, LIMITS.achievements) do
-                    if calls >= LIMITS.calls then truncate("api_call_limit") break end
-                    local got, id = call(GetAchievementInfo, category.id, index)
-                    if got and number(id) and id > 0 then
-                        local queue, queued = { id }, { [id] = true }
-                        local cursor = 1
-                        while cursor <= #queue and cursor <= LIMITS.achievements and calls < LIMITS.calls do
-                            local current = queue[cursor]
-                            cursor = cursor + 1
-                            if not seen[current] then
-                                addAchievement(current, category.id)
-                                for _, getter in ipairs({ GetPreviousAchievement or false, GetNextAchievement or false }) do
-                                    local linked, nextID = call(getter, current)
-                                    if linked and number(nextID) and nextID > 0 and not queued[nextID] then
-                                        queued[nextID] = true queue[#queue + 1] = nextID
-                                    end
-                                end
-                            end
-                        end
-                        if cursor <= #queue then truncate("chain_limit") end
-                    else
-                        result.summary.achievementFailures = result.summary.achievementFailures + 1
-                        if #result.failedCategories < LIMITS.categories then
-                            result.failedCategories[#result.failedCategories + 1] = { categoryID = category.id, index = index, reason = "achievement_lookup_failed" }
-                        end
-                    end
+                local before = diagnostics.unresolved
+                if failed.kind == "achievementIDFailures" then
+                    seen[failed.id] = nil
+                    discover(failed.id, failed.categoryID)
+                elseif failed.kind == "categoryIndexFailures" then
+                    readIndex(failed.categoryID, failed.index)
+                else
+                    enumerate(failed.categoryID)
                 end
-                if count > LIMITS.achievements then truncate("category_achievement_limit") end
+                if diagnostics.unresolved == before then diagnostics.recovered = diagnostics.recovered + 1 end
             end
         end
     end
+    diagnostics.categories = {}
+    for _, category in pairs(failureCategories) do
+        diagnostics.categories[#diagnostics.categories + 1] = category
+    end
+    table.sort(diagnostics.categories, function(a, b) return a.categoryID < b.categoryID end)
     table.sort(result.entries, function(a, b) return a.achievementID < b.achievementID end)
     ns.SummarizeAchievements(result)
     if not result.available then result.reason = "No selected category could be enumerated. Missing achievements remain unknown." end
@@ -305,7 +370,29 @@ function ns.SummarizeAchievements(value)
     end
 end
 
+local function stableCollection(options)
+    local started = time()
+    local value = collector(options)
+    value.collectionAttempts = 1
+    if value.changedDuringCollection then
+        -- Wait for half a second without an update, capped at two seconds.
+        -- A busy event stream still gets only one replacement scan.
+        for _ = 1, 4 do
+            local revision = updates
+            coroutine.yield(#value.entries, 0.5, "refreshing")
+            if updates == revision then break end
+        end
+        value = collector(options)
+        value.collectionAttempts = 2
+        value.changedOnInitialAttempt = true
+        value.collectionRequestedAt = started
+    end
+    return value
+end
+
 function ns.GetAchievements()
+    -- Legacy synchronous callers cannot wait for cache events. The chooser uses
+    -- CollectAchievements, which applies the delays and bounded repeat scan.
     local thread = coroutine.create(function() return collector(ns.GetAchievementOptions()) end)
     while true do
         local ok, value = coroutine.resume(thread)
@@ -316,15 +403,15 @@ end
 
 function ns.CollectAchievements(callback, progress)
     local options = ns.GetAchievementOptions()
-    local thread = coroutine.create(function() return collector(options) end)
+    local thread = coroutine.create(function() return stableCollection(options) end)
     local cancelled = false
     local function step()
         if cancelled then return end
-        local ok, value = coroutine.resume(thread)
+        local ok, value, delay, phase = coroutine.resume(thread)
         if not ok then callback(nil, tostring(value)) return end
         if coroutine.status(thread) == "dead" then callback(value) return end
-        if progress then progress(value) end
-        if C_Timer and C_Timer.After then C_Timer.After(0, step) else step() end
+        if progress then progress(value, phase) end
+        if C_Timer and C_Timer.After then C_Timer.After(delay or 0, step) else step() end
     end
     step()
     return function() cancelled = true end
@@ -356,6 +443,15 @@ function ns.AchievementReport(value)
     if summary.omittedForPayloadSize then add("- Omitted for payload size: " .. summary.omittedForPayloadSize) end
     add("- Truncated: " .. (value.truncated and "yes" or "no") .. "; changed during collection: " .. (value.changedDuringCollection and "yes" or "no"))
     add("- Criteria failures: " .. summary.criteriaFailures .. "; achievement lookup failures: " .. summary.achievementFailures)
+    if value.lookupDiagnostics then
+        local d = value.lookupDiagnostics
+        add("- Lookup retries: " .. d.recovered .. " recovered; " .. d.unresolved .. " unresolved ("
+            .. d.categoryIndexFailures .. " category entries, " .. d.achievementIDFailures
+            .. " achievement IDs, " .. d.categoryCountFailures .. " category counts).")
+    end
+    if value.collectionAttempts == 2 then
+        add("- Collection repeated after achievement updates; final scan changed: " .. (value.changedDuringCollection and "yes" or "no"))
+    end
     add("- Hidden achievement coverage is not guaranteed. All means all client-enumerable personal achievements; statistics and guild achievements are excluded.")
     if value.reason then add("- Unavailable: " .. clean(value.reason)) end
     -- One line per category and reason; a category can fail hundreds of lookups.
