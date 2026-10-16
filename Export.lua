@@ -600,13 +600,13 @@ end
 
 local CATEGORY_ORDER = {
     "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
-    "decorInventory", "questLog", "professionRecipes", "achievements",
+    "decorInventory", "questLog", "questHistory", "professionRecipes", "achievements",
 }
 
 local CATEGORY_FIELDS = {
     equipment = "equipment", bagItems = "bagEquipment", currentSpellbook = "currentSpellbook", talents = "talents",
     vault = "vault", currencyCaps = "currencyCaps", currencies = "currencies", reputations = "reputations",
-    decorInventory = "decorInventory", questLog = "questLog",
+    decorInventory = "decorInventory", questLog = "questLog", questHistory = "questHistory",
     professionRecipes = "professionRecipes",
     achievements = "achievements",
 }
@@ -614,7 +614,7 @@ local CATEGORY_FIELDS = {
 local CATEGORY_TITLES = {
     equipment = "Equipped gear", bagItems = "Bag items", currentSpellbook = "Current spellbook", talents = "Active talents",
     vault = "Great Vault", currencyCaps = "Currency caps", currencies = "Current currencies", reputations = "Current reputations",
-    decorInventory = "Housing decor inventory", questLog = "Current quest log",
+    decorInventory = "Housing decor inventory", questLog = "Current quest log", questHistory = "Quest history",
     professionRecipes = "Learned recipes and techniques",
     achievements = "Achievements",
 }
@@ -624,7 +624,7 @@ local function selectedOptions(options)
     options = options or ns.GetExportOptions()
     for _, category in ipairs(CATEGORY_ORDER) do
         selected[category] = ns.IsExportSupported(category) and options[category] ~= false
-        if category == "achievements" then selected[category] = options[category] == true end
+        if category == "achievements" or category == "questHistory" then selected[category] = options[category] == true end
     end
     return selected
 end
@@ -658,6 +658,7 @@ function ns.BuildSnapshot(options)
     if selected.questLog then snapshot.questLog = questLog() end
     if selected.professionRecipes then snapshot.professionRecipes = ns.GetProfessionRecipes() end
     if selected.achievements then snapshot.achievements = ns.GetAchievements() end
+    if selected.questHistory then snapshot.questHistory = ns.GetQuestHistory() end
     return snapshot
 end
 
@@ -667,6 +668,7 @@ function ns.BuildCompleteSnapshot()
     -- Achievement collection is opt-in and batched by the chooser. Opening
     -- the chooser must not scan the complete achievement tree.
     all.achievements = false
+    all.questHistory = false
     return ns.BuildSnapshot(all)
 end
 
@@ -706,7 +708,7 @@ function ns.FormatExportSummary(snapshot)
         elseif unavailable then
             parts[#parts + 1] = label .. " unavailable"
         else
-            parts[#parts + 1] = label .. " " .. tostring(count or 0)
+            parts[#parts + 1] = label .. " " .. ns.FormatCount(count or 0)
         end
     end
     add("equipped", options.equipment, #(snapshot.equipment or {}))
@@ -724,6 +726,8 @@ function ns.FormatExportSummary(snapshot)
     add("decor", options.decorInventory, decor and #(decor.packedItems or decor.items or {}) or 0, decor and decor.available == false)
     local quests = snapshot.questLog
     add("quests", options.questLog, quests and #(quests.entries or {}) or 0, quests and quests.available == false)
+    local history = snapshot.questHistory
+    add("completed quests", options.questHistory, history and #history.entries or 0, not history or history.available == false)
     local recipes = snapshot.professionRecipes
     add("profession entries", options.professionRecipes, countRecipes(recipes), recipes and recipes.available == false)
     local achievements = snapshot.achievements
@@ -742,7 +746,7 @@ local function plain(value)
 end
 
 local function recordCountText(count)
-    return tostring(count) .. (count == 1 and " record" or " records")
+    return ns.FormatCount(count) .. (count == 1 and " record" or " records")
 end
 
 local CLASS_NAMES = {
@@ -789,8 +793,10 @@ local function append(lines, value)
     lines[#lines + 1] = value
 end
 
-local function addValue(parts, label, value)
-    if value ~= nil and value ~= "" then parts[#parts + 1] = label .. " " .. plain(value) end
+local function addValue(parts, label, value, isCount)
+    if value ~= nil and value ~= "" then
+        parts[#parts + 1] = label .. " " .. (isCount and ns.FormatCount(value) or plain(value))
+    end
 end
 
 local function itemLine(item, location)
@@ -798,7 +804,7 @@ local function itemLine(item, location)
     local name = item.name or linkName(item.link) or "Unknown item"
     addValue(parts, "item ID", item.itemID)
     addValue(parts, "item level", item.itemLevel or item.baseItemLevel)
-    addValue(parts, "quantity", item.stackCount and item.stackCount > 1 and item.stackCount or nil)
+    addValue(parts, "quantity", item.stackCount and item.stackCount > 1 and item.stackCount or nil, true)
     addValue(parts, "quality", item.quality)
     addValue(parts, "type", item.itemSubType or item.itemType)
     if item.isBound ~= nil then addValue(parts, "bound", item.isBound and "yes" or "no") end
@@ -808,6 +814,7 @@ local function itemLine(item, location)
 end
 
 local function categoryCount(snapshot, category)
+    if category == "questHistory" then return snapshot.questHistory and #snapshot.questHistory.entries or 0 end
     if category == "achievements" then return snapshot.achievements and #snapshot.achievements.entries or 0 end
     if category == "equipment" then return #(snapshot.equipment or {}) end
     if category == "bagItems" then return #(snapshot.bagEquipment or {}) end
@@ -829,7 +836,7 @@ end
 local function categoryUnavailable(snapshot, category)
     local field = CATEGORY_FIELDS[category]
     local value = snapshot[field]
-    if category == "achievements" then return not value or value.available == false end
+    if category == "achievements" or category == "questHistory" then return not value or value.available == false end
     if category == "talents" then return not (value and value.importString) end
     if category == "vault" then
         return not (value and (value.currentPeriod ~= nil or value.hasAvailableRewards ~= nil
@@ -905,6 +912,7 @@ local function reportSection(snapshot, category)
 end
 
 function buildSection(snapshot, category)
+    if category == "questHistory" then return ns.QuestHistoryReport(snapshot.questHistory) end
     if category == "achievements" then return ns.AchievementReport(snapshot.achievements) end
     local lines = { "## " .. CATEGORY_TITLES[category], "" }
     if categoryUnavailable(snapshot, category) then
@@ -955,11 +963,11 @@ function buildSection(snapshot, category)
         append(lines, "- Current reward period: " .. tostring(boolText(value.currentPeriod) or "unknown"))
         append(lines, "- Rewards available: " .. tostring(boolText(value.hasAvailableRewards) or "unknown"))
         append(lines, "- Generated rewards: " .. tostring(boolText(value.hasGeneratedRewards) or "unknown"))
-        if value.nextResetSeconds then append(lines, "- Seconds until reset: " .. tostring(value.nextResetSeconds)) end
+        if value.nextResetSeconds then append(lines, "- Seconds until reset: " .. ns.FormatCount(value.nextResetSeconds)) end
         if value.dungeonRuns then
-            append(lines, "- Dungeon runs: Heroic " .. tostring(value.dungeonRuns.heroic or 0)
-                .. ", Mythic " .. tostring(value.dungeonRuns.mythic or 0)
-                .. ", Mythic+ " .. tostring(value.dungeonRuns.mythicPlus or 0))
+            append(lines, "- Dungeon runs: Heroic " .. ns.FormatCount(value.dungeonRuns.heroic or 0)
+                .. ", Mythic " .. ns.FormatCount(value.dungeonRuns.mythic or 0)
+                .. ", Mythic+ " .. ns.FormatCount(value.dungeonRuns.mythicPlus or 0))
         end
         for _, activity in ipairs(value.activities or {}) do
             local parts = {}
@@ -967,7 +975,7 @@ function buildSection(snapshot, category)
             addValue(parts, "index", activity.index)
             addValue(parts, "activity ID", activity.id)
             if activity.progress ~= nil or activity.threshold ~= nil then
-                parts[#parts + 1] = "progress " .. tostring(activity.progress or "?") .. "/" .. tostring(activity.threshold or "?")
+                parts[#parts + 1] = "progress " .. ns.FormatCount(activity.progress or "?") .. "/" .. ns.FormatCount(activity.threshold or "?")
             end
             addValue(parts, "level", activity.level)
             addValue(parts, "tier ID", activity.activityTierID)
@@ -977,7 +985,7 @@ function buildSection(snapshot, category)
                 local rewardParts = {}
                 addValue(rewardParts, "type", rewardInfo.type)
                 addValue(rewardParts, "ID", rewardInfo.id)
-                addValue(rewardParts, "quantity", rewardInfo.quantity)
+                addValue(rewardParts, "quantity", rewardInfo.quantity, true)
                 addValue(rewardParts, "item", linkName(rewardInfo.link))
                 addValue(rewardParts, "item string", itemString(rewardInfo.link))
                 append(lines, "  - Reward: " .. table.concat(rewardParts, "; "))
@@ -987,14 +995,14 @@ function buildSection(snapshot, category)
         for _, currency in ipairs(snapshot.currencyCaps or {}) do
             local parts = {}
             addValue(parts, "currency ID", currency.currencyID)
-            addValue(parts, "current amount", currency.quantity)
+            addValue(parts, "current amount", currency.quantity, true)
             if currency.canEarnPerWeek and currency.maxWeeklyQuantity and currency.maxWeeklyQuantity > 0 then
-                addValue(parts, "weekly cap progress", tostring(currency.quantityEarnedThisWeek or 0) .. "/" .. tostring(currency.maxWeeklyQuantity))
+                addValue(parts, "weekly cap progress", ns.FormatCount(currency.quantityEarnedThisWeek or 0) .. "/" .. ns.FormatCount(currency.maxWeeklyQuantity))
             end
             if currency.useTotalEarnedForMaxQty and currency.maxQuantity and currency.maxQuantity > 0 then
-                addValue(parts, "season-cap progress", tostring(currency.totalEarned or 0) .. "/" .. tostring(currency.maxQuantity))
+                addValue(parts, "season-cap progress", ns.FormatCount(currency.totalEarned or 0) .. "/" .. ns.FormatCount(currency.maxQuantity))
             elseif currency.maxQuantity and currency.maxQuantity > 0 then
-                addValue(parts, "holding cap", currency.maxQuantity)
+                addValue(parts, "holding cap", currency.maxQuantity, true)
             end
             addValue(parts, "account-wide", boolText(currency.isAccountWide))
             addValue(parts, "transferable", boolText(currency.isAccountTransferable))
@@ -1002,7 +1010,7 @@ function buildSection(snapshot, category)
         end
     elseif category == "currencies" then
         for _, currency in ipairs((snapshot.currencies or {}).entries or {}) do
-            local parts = { "currency ID " .. tostring(currency.currencyID or "unknown"), "current amount " .. tostring(currency.quantity or 0) }
+            local parts = { "currency ID " .. tostring(currency.currencyID or "unknown"), "current amount " .. ns.FormatCount(currency.quantity or 0) }
             addValue(parts, "account-wide", boolText(currency.isAccountWide))
             addValue(parts, "transferable", boolText(currency.isAccountTransferable))
             append(lines, "- " .. plain(currency.name or "Unknown currency") .. " (" .. table.concat(parts, "; ") .. ")")
@@ -1012,8 +1020,8 @@ function buildSection(snapshot, category)
             local parts = { "faction ID " .. tostring(reputation.factionID or "unknown") }
             addValue(parts, "standing", reactionText(reputation.reaction))
             if reputation.currentStanding ~= nil and reputation.currentReactionThreshold ~= nil and reputation.nextReactionThreshold ~= nil then
-                addValue(parts, "standing progress", tostring(reputation.currentStanding - reputation.currentReactionThreshold)
-                    .. "/" .. tostring(reputation.nextReactionThreshold - reputation.currentReactionThreshold))
+                addValue(parts, "standing progress", ns.FormatCount(reputation.currentStanding - reputation.currentReactionThreshold)
+                    .. "/" .. ns.FormatCount(reputation.nextReactionThreshold - reputation.currentReactionThreshold))
             end
             addValue(parts, "major faction", boolText(reputation.isMajorFaction))
             addValue(parts, "watched", boolText(reputation.isWatched))
@@ -1021,8 +1029,8 @@ function buildSection(snapshot, category)
         end
     elseif category == "decorInventory" then
         local decor = snapshot.decorInventory or {}
-        if decor.totalOwnedCount ~= nil then append(lines, "- Total owned copies: " .. tostring(decor.totalOwnedCount)) end
-        if decor.maxOwnedCount ~= nil then append(lines, "- Collection capacity: " .. tostring(decor.maxOwnedCount)) end
+        if decor.totalOwnedCount ~= nil then append(lines, "- Total owned copies: " .. ns.FormatCount(decor.totalOwnedCount)) end
+        if decor.maxOwnedCount ~= nil then append(lines, "- Collection capacity: " .. ns.FormatCount(decor.maxOwnedCount)) end
         if decor.truncated then append(lines, "- **Truncated:** yes") end
         for _, row in ipairs(decor.packedItems or {}) do
             local flags = tonumber(row[9]) or 0
@@ -1033,10 +1041,10 @@ function buildSection(snapshot, category)
             append(lines, "- " .. plain(row[2] or "Unknown decor")
                 .. " (record ID " .. tostring(row[1] or "unknown")
                 .. (tonumber(row[3]) and row[3] > 0 and "; item ID " .. tostring(row[3]) or "")
-                .. "): stored " .. tostring(row[5] or 0)
-                .. ", placed " .. tostring(row[6] or 0)
-                .. ", redeemable " .. tostring(row[7] or 0)
-                .. ", destroyable " .. tostring(row[8] or 0)
+                .. "): stored " .. ns.FormatCount(row[5] or 0)
+                .. ", placed " .. ns.FormatCount(row[6] or 0)
+                .. ", redeemable " .. ns.FormatCount(row[7] or 0)
+                .. ", destroyable " .. ns.FormatCount(row[8] or 0)
                 .. (#properties > 0 and "; " .. table.concat(properties, ", ") or ""))
         end
         for _, item in ipairs(decor.items or {}) do
@@ -1053,7 +1061,7 @@ function buildSection(snapshot, category)
             addValue(parts, "tag", quest.tag and quest.tag.name)
             addValue(parts, "complete", boolText(quest.isComplete))
             addValue(parts, "failed", boolText(quest.isFailed))
-            addValue(parts, "suggested group", quest.suggestedGroup and quest.suggestedGroup > 0 and quest.suggestedGroup or nil)
+            addValue(parts, "suggested group", quest.suggestedGroup and quest.suggestedGroup > 0 and quest.suggestedGroup or nil, true)
             append(lines, "- " .. plain(quest.title or "Unknown quest") .. " (" .. table.concat(parts, "; ") .. ")")
             for _, objective in ipairs(quest.objectives or {}) do
                 append(lines, "  - " .. plain(objective.text or "Objective progress")
@@ -1064,8 +1072,8 @@ function buildSection(snapshot, category)
                     .. ", " .. tostring(quest.waypoint.x) .. ", " .. tostring(quest.waypoint.y))
             end
             if quest.timer then
-                append(lines, "  - Timer: " .. tostring(quest.timer.elapsedSeconds or 0)
-                    .. "/" .. tostring(quest.timer.totalSeconds or 0) .. " seconds")
+                append(lines, "  - Timer: " .. ns.FormatCount(quest.timer.elapsedSeconds or 0)
+                    .. "/" .. ns.FormatCount(quest.timer.totalSeconds or 0) .. " seconds")
             end
         end
     elseif category == "professionRecipes" then
@@ -1074,8 +1082,8 @@ function buildSection(snapshot, category)
         append(lines, "")
         if professions.truncated then append(lines, "**Truncated:** yes") append(lines, "") end
         for _, profession in ipairs(professions.professions or {}) do
-            local skill = profession.skillLevel and (" — skill " .. tostring(profession.skillLevel)
-                .. (profession.maxSkillLevel and "/" .. tostring(profession.maxSkillLevel) or "")) or ""
+            local skill = profession.skillLevel and (" — skill " .. ns.FormatCount(profession.skillLevel)
+                .. (profession.maxSkillLevel and "/" .. ns.FormatCount(profession.maxSkillLevel) or "")) or ""
             append(lines, "### " .. plain(profession.name or "Unknown profession") .. skill)
             append(lines, "")
             append(lines, "Skill line ID: " .. tostring(profession.skillLineID or "unknown"))
@@ -1095,6 +1103,7 @@ end
 function ns.GetExportCategoryInfo(snapshot, category, includeCharacters)
     local options = snapshot.exportOptions or {}
     local enabled = options[category] ~= false
+    if category == "questHistory" or category == "achievements" then enabled = options[category] == true end
     local unavailable = enabled and categoryUnavailable(snapshot, category)
     local count = categoryCount(snapshot, category)
     local section = enabled and includeCharacters ~= false and reportSection(snapshot, category) or ""
@@ -1143,7 +1152,7 @@ function ns.BuildAIReport(snapshot)
         end
     end
     for _, category in ipairs(CATEGORY_ORDER) do
-        if ns.IsExportSupported(category) and snapshot.exportOptions[category] ~= false then
+        if ns.IsExportSupported(category) and ns.GetExportCategoryInfo(snapshot, category, false).enabled then
             append(lines, "")
             append(lines, reportSection(snapshot, category))
         end
@@ -1172,6 +1181,17 @@ function ns.BuildExport(snapshot, checkpoint)
     end
     if checkpoint then checkpoint("serializing") end
     local json = encode(snapshot, checkpoint)
+    local function omitQuestTitles()
+        local history = snapshot.questHistory
+        if not history or history.titlePolicy == "ids_and_status_only_for_size"
+            or (history.summary.titlesExported or 0) == 0 then return false end
+        local copy = {}
+        for key, value in pairs(snapshot) do copy[key] = value end
+        snapshot = copy
+        snapshot.questHistory = ns.QuestHistoryWithoutTitles(history, checkpoint)
+        json = encode(snapshot, checkpoint)
+        return true
+    end
     local trimmed = 0
     local achievements = snapshot.achievements
     -- The importer bounds both decompressed bytes and encoded length. Remove
@@ -1189,7 +1209,7 @@ function ns.BuildExport(snapshot, checkpoint)
         return true
     end
     while #json > MAX_DECOMPRESSED_BYTES do
-        assert(trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
+        assert(omitQuestTitles() or trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
     end
     if checkpoint then checkpoint("compressing", 0, #json) end
     local compressed = LibDeflate:CompressDeflate(json, { level = 3, checkpoint = checkpoint })
@@ -1197,7 +1217,7 @@ function ns.BuildExport(snapshot, checkpoint)
     if checkpoint then checkpoint("encoding", 0, #compressed) end
     local printable = LibDeflate:EncodeForPrint(compressed, checkpoint)
     while #printable > MAX_ENCODED_LENGTH do
-        assert(trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
+        assert(omitQuestTitles() or trimAchievements(), "Selected data exceeds the export size limit. Choose fewer categories.")
         if checkpoint then checkpoint("compressing", 0, #json) end
         compressed = LibDeflate:CompressDeflate(json, { level = 3, checkpoint = checkpoint })
         assert(compressed, "could not compress export")

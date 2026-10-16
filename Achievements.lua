@@ -438,16 +438,16 @@ function ns.AchievementReport(value)
     end
     if value.filters.expansionSelection then add("- Current expansion categories: selected by the player for this client; no automatic expansion classification.") end
     add("- Captured at: Unix " .. value.capturedAt .. "; achievement schema version: " .. value.schemaVersion)
-    add("- Exported: " .. summary.exported .. "; complete: " .. summary.complete .. "; incomplete: " .. summary.incomplete
-        .. "; unknown: " .. summary.unknown .. "; criteria: " .. summary.criteriaExported)
-    if summary.omittedForPayloadSize then add("- Omitted for payload size: " .. summary.omittedForPayloadSize) end
+    add("- Exported: " .. ns.FormatCount(summary.exported) .. "; complete: " .. ns.FormatCount(summary.complete) .. "; incomplete: " .. ns.FormatCount(summary.incomplete)
+        .. "; unknown: " .. ns.FormatCount(summary.unknown) .. "; criteria: " .. ns.FormatCount(summary.criteriaExported))
+    if summary.omittedForPayloadSize then add("- Omitted for payload size: " .. ns.FormatCount(summary.omittedForPayloadSize)) end
     add("- Truncated: " .. (value.truncated and "yes" or "no") .. "; changed during collection: " .. (value.changedDuringCollection and "yes" or "no"))
-    add("- Criteria failures: " .. summary.criteriaFailures .. "; achievement lookup failures: " .. summary.achievementFailures)
+    add("- Criteria failures: " .. ns.FormatCount(summary.criteriaFailures) .. "; achievement lookup failures: " .. ns.FormatCount(summary.achievementFailures))
     if value.lookupDiagnostics then
         local d = value.lookupDiagnostics
-        add("- Lookup retries: " .. d.recovered .. " recovered; " .. d.unresolved .. " unresolved ("
-            .. d.categoryIndexFailures .. " category entries, " .. d.achievementIDFailures
-            .. " achievement IDs, " .. d.categoryCountFailures .. " category counts).")
+        add("- Lookup retries: " .. ns.FormatCount(d.recovered) .. " recovered; " .. ns.FormatCount(d.unresolved) .. " unresolved ("
+            .. ns.FormatCount(d.categoryIndexFailures) .. " category entries, " .. ns.FormatCount(d.achievementIDFailures)
+            .. " achievement IDs, " .. ns.FormatCount(d.categoryCountFailures) .. " category counts).")
     end
     if value.collectionAttempts == 2 then
         add("- Collection repeated after achievement updates; final scan changed: " .. (value.changedDuringCollection and "yes" or "no"))
@@ -462,7 +462,7 @@ function ns.AchievementReport(value)
         failures[key] = failures[key] + 1
     end
     for _, key in ipairs(failureOrder) do
-        add("- Category could not be enumerated: " .. key .. (failures[key] > 1 and (", " .. failures[key] .. " times") or ""))
+        add("- Category could not be enumerated: " .. key .. (failures[key] > 1 and (", " .. ns.FormatCount(failures[key]) .. " times") or ""))
     end
     if #value.failedAchievements > 0 then add("- Achievements that could not be read: " .. table.concat(value.failedAchievements, ", ")) end
     local reasons = {}
@@ -529,7 +529,7 @@ function ns.AchievementReport(value)
                     text = "criterion " .. tostring(criterion.criteriaID or criterion.index) .. " unreadable"
                 end
                 if criterion.required and criterion.required > 1 then
-                    text = (text ~= "" and text .. " " or "") .. tostring(criterion.current or "?") .. "/" .. criterion.required
+                    text = (text ~= "" and text .. " " or "") .. ns.FormatCount(criterion.current or "?") .. "/" .. ns.FormatCount(criterion.required)
                 end
                 if text == "" then text = "unnamed criterion" end
                 local group = groups[criterion.completionState]
@@ -537,7 +537,7 @@ function ns.AchievementReport(value)
             end
             local total = #entry.criteria
             if #groups.incomplete > 0 then
-                add("  - Not done (" .. #groups.incomplete .. " of " .. total .. "): " .. table.concat(groups.incomplete, "; "))
+                add("  - Not done (" .. ns.FormatCount(#groups.incomplete) .. " of " .. ns.FormatCount(total) .. "): " .. table.concat(groups.incomplete, "; "))
             end
             if #groups.complete > 0 then add("  - Done: " .. table.concat(groups.complete, "; ")) end
             if #groups.unknown > 0 then add("  - Unknown: " .. table.concat(groups.unknown, "; ")) end

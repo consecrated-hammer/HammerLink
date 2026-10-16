@@ -4,6 +4,7 @@ function CreateFrame() return { RegisterEvent = function() end, SetScript = func
 function time() return 1790900000 end
 local ticks = {}
 C_Timer = { After = function(_, callback) ticks[#ticks + 1] = callback end }
+assert(loadfile("Numbers.lua"))("HammerLink", ns)
 assert(loadfile("Achievements.lua"))("HammerLink", ns)
 assert(ns.GetAchievementOptions().scope == "dungeons")
 local categories = {

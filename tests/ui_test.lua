@@ -114,7 +114,7 @@ function UIDropDownMenu_SetText(frame, value) frame.dropdownText = value end
 
 function namespace.GetExportOptions() return namespace.db.options end
 function namespace.IsExportEnabled(category)
-    if category == "achievements" then return namespace.db.options[category] == true end
+    if category == "achievements" or category == "questHistory" then return namespace.db.options[category] == true end
     return namespace.db.options[category] ~= false
 end
 local achievementOptions = { scope = "dungeons", categoryIDs = {}, expansionCategoryIDs = {} }
@@ -122,6 +122,12 @@ function namespace.GetAchievementOptions() return achievementOptions end
 function namespace.SetAchievementScope(scope) achievementOptions.scope = scope end
 function namespace.GetAchievementCategories() return {} end
 local achievementCollections = 0
+local historyCollections = 0
+function namespace.CollectQuestHistory(callback)
+    historyCollections = historyCollections + 1
+    callback({ entries = { { questID = 42, completed = true } }, available = true })
+    return function() end
+end
 function namespace.CollectAchievements(callback)
     achievementCollections = achievementCollections + 1
     callback({ entries = { { achievementID = 1 } }, available = achievementOptions.scope ~= "all" })
@@ -147,6 +153,10 @@ function namespace.SelectSnapshot(snapshot, options)
     return selected
 end
 function namespace.GetExportCategoryInfo(snapshot, category)
+    if category == "questHistory" then
+        local value = snapshot.questHistory
+        return { count = value and #value.entries or 0, characters = 100, unavailable = not value }
+    end
     if category == "achievements" then
         local enabled = snapshot.exportOptions.achievements == true
         local value = snapshot.achievements
@@ -167,6 +177,7 @@ function namespace.BuildExport(snapshot)
     return "HL1:test"
 end
 GetTime = function() return 20 end
+time = function() return 1800000000 end
 local pendingExport, pendingProgress
 function namespace.BuildExportAsync(snapshot, callback, progress)
     namespace.asyncCalls = (namespace.asyncCalls or 0) + 1
@@ -178,6 +189,7 @@ function namespace.FormatExportSummary() return "exported — test" end
 function namespace.Print(message) namespace.lastMessage = message end
 function namespace.GetMetadata() return nil end
 
+assert(loadfile("Numbers.lua"))("HammerLink", namespace)
 assert(loadfile("UI.lua"))("HammerLink", namespace)
 
 namespace.ShowExport()
@@ -187,9 +199,10 @@ assert(chooser.format == "ai", "expected AI-readable export to be the default")
 assert(chooser.formatDropdown.selectedValue == "ai" and chooser.formatDropdown.dropdownText == "AI-readable report", "expected the native dropdown to show the selected format")
 assert(chooser.formatDropdown.dropdownWidth == 210, "expected the format dropdown to fit its text rather than span the panel")
 assert(chooser.formatDropdown.Text.justifyH == "LEFT", "expected the selected dropdown value to be left-aligned")
-assert(chooser.rows.bagItems.count.text:find("L118 records", 1, true), "expected locale-aware per-category counts")
-assert(chooser.rows.talents.count.text:find("L1 record", 1, true), "expected singular per-category count wording")
-assert(numberFormatCalls > 0, "expected Blizzard's number formatter")
+assert(chooser.rows.bagItems.count.text:find("118 records", 1, true), "expected grouped per-category counts")
+assert(chooser.rows.talents.count.text:find("1 record", 1, true), "expected singular per-category count wording")
+assert(namespace.FormatCount(123456789) == "123,456,789", "counts use comma grouping")
+assert(namespace.FormatCount(-12345.5) == "-12,345.5", "fractional signed amounts retain their value")
 assert(chooser.summary.text:find("records across 11 categories", 1, true), "expected live selected-record total")
 assert(chooser.summary.text:find("about ", 1, true) and chooser.summary.text:find("KB", 1, true), "expected an approximate report size in KB")
 assert(not chooser.summary.text:find("characters", 1, true), "expected the raw character estimate to be hidden")
@@ -301,9 +314,9 @@ achievementCheck:SetChecked(true)
 achievementCheck.scripts.OnClick(achievementCheck)
 assert(chooser.achievementLoading and not generate.enabled, "collection must disable Generate export")
 assert(generate.text == "Collecting...", "the disabled button must say why")
-assert(chooser.exportWarning.shown and chooser.exportWarning.text:find("Collecting achievements", 1, true))
+assert(chooser.achievementCollectionStatus.shown and chooser.achievementCollectionStatus.text:find("Collecting achievements", 1, true))
 reportProgress(1234)
-assert(chooser.exportWarning.text:find("L1234 records so far", 1, true), "collection shows a running count")
+assert(chooser.achievementCollectionStatus.text:find("1,234 records so far", 1, true), "collection shows a running count")
 completeCollection()
 assert(not chooser.achievementLoading and generate.enabled, "finished collection must enable Generate export")
 assert(generate.text == "Generate export" and chooser.exportWarning.text:find("about a minute", 1, true))
@@ -336,4 +349,56 @@ namespace.ShowExport()
 generate.scripts.OnClick()
 namespace.ShowExport()
 assert(not pendingExport and not chooser.generating, "reopening discards an unfinished generation")
+assert(historyCollections == 0, "opening chooser never scans optional quest history")
+local historyCheck = chooser.rows.questHistory.check
+local historyDone, historyCancelled, historyProgress
+namespace.CollectQuestHistory = function(callback, progress)
+    historyDone, historyProgress = callback, progress
+    return function() historyCancelled = true; historyDone = nil end
+end
+historyCheck:SetChecked(true)
+historyCheck.scripts.OnClick(historyCheck)
+assert(chooser.questHistoryLoading and not generate.enabled and generate.text == "Collecting...", "history loading disables generation")
+historyProgress(1200, "sorting")
+assert(chooser.questCollectionStatus.text:find("Sorting quest history", 1, true), "history sorting shows progress")
+local achievementDone, achievementProgress
+namespace.CollectAchievements = function(callback, progress)
+    achievementDone, achievementProgress = callback, progress
+    return function() achievementDone = nil end
+end
+achievementCheck:SetChecked(true)
+achievementCheck.scripts.OnClick(achievementCheck)
+achievementProgress(90, "retrying")
+historyProgress(1300, "names")
+assert(chooser.questCollectionStatus.shown and chooser.achievementCollectionStatus.shown
+    and chooser.questCollectionStatus.text:find("1,300 records", 1, true)
+    and chooser.achievementCollectionStatus.text:find("90 records", 1, true),
+    "concurrent collectors have independent status lines")
+historyDone({ available = true, entries = { { questID = 42, completed = true } } })
+assert(not generate.enabled and chooser.achievementCollectionStatus.text:find("Retrying achievement reads", 1, true),
+    "finishing history leaves achievement progress and busy state intact")
+achievementDone({ available = true, entries = {} })
+achievementCheck:SetChecked(false)
+achievementCheck.scripts.OnClick(achievementCheck)
+assert(chooser.snapshot.questHistory.entries[1].questID == 42 and generate.enabled, "history completion enables generation")
+historyCheck:SetChecked(false)
+historyCheck.scripts.OnClick(historyCheck)
+assert(not chooser.snapshot.questHistory and not chooser.questHistoryLoading, "unchecking discards history")
+historyCheck:SetChecked(true)
+historyCheck.scripts.OnClick(historyCheck)
+chooser:Hide()
+assert(historyCancelled and not historyDone and not chooser.questHistoryLoading, "closing cancels history collection")
+historyCancelled = false
+namespace.ShowExport()
+namespace.ShowExport()
+assert(historyCancelled and chooser.questHistoryLoading, "reopening cancels the previous history scan")
+historyCheck:SetChecked(false)
+historyCheck.scripts.OnClick(historyCheck)
+historyCheck:SetChecked(true)
+historyCheck.scripts.OnClick(historyCheck)
+historyDone(nil, "test collection failure")
+assert(chooser.snapshot.questHistory.available == false and generate.enabled,
+    "collection failure exports explicit unavailable metadata rather than blocking all other sections")
+historyCheck:SetChecked(false)
+historyCheck.scripts.OnClick(historyCheck)
 print("HammerLink UI tests passed")

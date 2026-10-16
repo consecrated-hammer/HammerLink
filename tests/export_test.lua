@@ -168,6 +168,7 @@ function GetFlyoutSlotInfo(_, slot)
     return 99999, 0, false, "Unlearned Test"
 end
 
+assert(loadfile("Numbers.lua"))("HammerLink", namespace)
 assert(loadfile("Export.lua"))("HammerLink", namespace)
 assert(namespace.BuildSnapshot().achievements == nil, "achievements must remain opt-in")
 local snapshot = namespace.BuildSnapshot()
@@ -310,7 +311,7 @@ assert(aiReport:find("season-cap progress 52/90", 1, true), "expected seasonal c
 assert(not aiReport:find("total earned", 1, true), "expected ambiguous currency API labels to be omitted")
 assert(aiReport:find("Traveler's Coin", 1, true) and aiReport:find("current amount 17", 1, true), "expected current-currency identity and wallet amount")
 assert(aiReport:find("Dornogal", 1, true) and aiReport:find("faction ID 2507", 1, true), "expected visible reputation identity")
-assert(aiReport:find("standing Friendly", 1, true) and aiReport:find("standing progress 3000/6000", 1, true), "expected readable within-tier reputation progress")
+assert(aiReport:find("standing Friendly", 1, true) and aiReport:find("standing progress 3,000/6,000", 1, true), "expected readable within-tier reputation progress")
 assert(aiReport:find("Warm Chair", 1, true) and aiReport:find("record ID 77", 1, true), "expected readable decor record")
 assert(aiReport:find("A Dark Errand", 1, true) and aiReport:find("quest ID 9001", 1, true), "expected readable quest identity")
 assert(aiReport:find("Ironforge Chandelier", 1, true) and aiReport:find("recipe ID 1261659", 1, true), "expected readable learned recipe identity")
@@ -386,8 +387,35 @@ function GetAchievementCategory() return 900 end
 function GetAchievementNumCriteria() return 1 end
 function GetAchievementCriteriaInfo() return "Missing boss", 0, false, 0, 1, nil, 0, 55, "0/1", 789 end
 assert(loadfile("Achievements.lua"))("HammerLink", namespace)
+assert(loadfile("QuestHistory.lua"))("HammerLink", namespace)
+local questHistoryReads = 0
+C_QuestLog.GetAllCompletedQuestIDs = function() questHistoryReads = questHistoryReads + 1 return { 9003, 9001, 9002 } end
+C_QuestLog.GetTitleForQuestID = function(id) if id == 9001 then return "Finished quest" end end
+assert(namespace.BuildCompleteSnapshot().questHistory == nil and questHistoryReads == 0,
+    "opening chooser must never collect optional history")
+exportOptions.questHistory = true
+exportOptions.questLog = true
 exportOptions.achievements = true
 local achievementSnapshot = namespace.BuildSnapshot()
+assert(#achievementSnapshot.questHistory.entries == 3 and achievementSnapshot.questLog,
+    "history and current log coexist")
+assert(achievementSnapshot.questHistory.entries[1].questID == 9001 and achievementSnapshot.questHistory.entries[1].completed)
+assert(namespace.GetExportCategoryInfo(achievementSnapshot, "questHistory").count == 3)
+assert(namespace.BuildAIReport(achievementSnapshot):find("- 9003: complete", 1, true), "AI report retains nameless completed IDs")
+assert(namespace.SelectSnapshot(achievementSnapshot, { questHistory = false }).questHistory == nil)
+exportOptions.questHistory = false
+local historyOnly = namespace.SelectSnapshot(achievementSnapshot, { questHistory = true })
+historyOnly.questHistory = { available = true, entries = {
+    { questID = 1, completed = true, title = string.rep("a", 3 * 1024 * 1024) },
+    { questID = 2, completed = true, title = string.rep("b", 3 * 1024 * 1024) },
+}, summary = { exported = 2, titlesExported = 2, titlesUnavailable = 0 } }
+local historyCode, _, historyExported = namespace.BuildExport(historyOnly)
+assert(#historyCode < 4 * 1024 * 1024 and #historyExported.questHistory.entries == 2)
+assert(historyExported.questHistory.titlePolicy == "ids_and_status_only_for_size"
+    and historyExported.questHistory.entries[2].questID == 2 and historyExported.questHistory.entries[2].completed,
+    "compact size fallback retains all IDs and statuses")
+assert(historyOnly.questHistory.entries[1].title and not historyOnly.questHistory.titlePolicy,
+    "fallback does not mutate the chooser capture")
 assert(achievementSnapshot.format == 3 and achievementSnapshot.exportOptions.achievements == true)
 local achievementCode = namespace.BuildExport(achievementSnapshot)
 assert(achievementCode:find('"completed":false', 1, true) and achievementCode:find('"current":0', 1, true))
@@ -535,3 +563,10 @@ assert(isolated.LibDeflate ~= shared and LibStub("LibDeflate").marker == "anothe
     "a shared library loaded by another addon must remain independent")
 assert(isolated.LibDeflate:CompressDeflate("wire test", { level = 9 }) == lib:CompressDeflate("wire test", { level = 9 }))
 print("HammerLink export tests passed")
+
+-- Count formatting must not alter adjacent IDs or enum codes.
+completeSnapshot.currencyCaps = { { currencyID = 123456, quantity = 123456789, maxQuantity = 987654321 } }
+local countReport = namespace.BuildAIReport(completeSnapshot)
+assert(countReport:find("currency ID 123456", 1, true))
+assert(countReport:find("current amount 123,456,789", 1, true))
+assert(countReport:find("holding cap 987,654,321", 1, true))

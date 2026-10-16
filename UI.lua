@@ -107,7 +107,7 @@ end
 
 local function showOutput(output, snapshot, format)
     dialog = dialog or createDialog()
-    local kilobytes = string.format("%.0f KB", #output / 1024)
+    local kilobytes = ns.FormatCount(math.floor(#output / 1024 + 0.5)) .. " KB"
     if format == "ai" then
         dialog.title:SetText("AI-readable HammerLink report")
         dialog.help:SetText("Copy this Markdown report into ChatGPT, Claude or another AI. Review it before sharing: it contains the selected character data.")
@@ -144,9 +144,9 @@ local function showOutput(output, snapshot, format)
         if C_Timer and C_Timer.After then C_Timer.After(0, refreshScroll) end
     end
     if format == "ai" then
-        ns.Print(("AI-readable report ready — %d characters"):format(#output))
+        ns.Print(("AI-readable report ready: %s characters"):format(ns.FormatCount(#output)))
     else
-        ns.Print(("export ready — %d characters after compression"):format(#output))
+        ns.Print(("export ready: %s characters after compression"):format(ns.FormatCount(#output)))
     end
     ns.Print(ns.FormatExportSummary(snapshot))
 end
@@ -162,8 +162,9 @@ local exportCategories = {
     { key = "reputations", title = "Current reputations", icon = "Interface\\Icons\\INV_Misc_Note_06", detail = "Visible Retail faction standings and progress. Collapsed headers and unavailable client fields are not inferred." },
     { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05", detail = "Owned Housing Catalog decor, including stored and placed counts." },
     { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01", detail = "Active quests, objective progress, quest types and available waypoints." },
+    { key = "questHistory", title = "Quest history", icon = "Interface\\Icons\\INV_Misc_Book_09", detail = "All client-reported completion IDs. Names where available; absent IDs stay unknown." },
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
-    { key = "achievements", title = "Achievements (optional)", icon = "Interface\\Icons\\Achievement_General", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
+    { key = "achievements", title = "Achievements", icon = "Interface\\Icons\\Achievement_General", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
 }
 
 local function visibleExportCategories()
@@ -185,26 +186,14 @@ local exportFormatLabels = {
 
 local LARGE_SECTION_CHARACTERS = 5000
 
-local function commaNumber(value)
-    local number = math.floor(tonumber(value) or 0)
-    if type(BreakUpLargeNumbers) == "function" then
-        local ok, formatted = pcall(BreakUpLargeNumbers, number)
-        if ok and formatted ~= nil then return tostring(formatted) end
-    end
-    local text = tostring(number)
-    while true do
-        local replaced, count = text:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
-        text = replaced
-        if count == 0 then return text end
-    end
-end
+local commaNumber = ns.FormatCount
 
 local function recordCountText(value)
     return commaNumber(value) .. (value == 1 and " record" or " records")
 end
 
 local function kilobyteText(characters)
-    return string.format("%.1fKB", (tonumber(characters) or 0) / 1024)
+    return ns.FormatCount(tonumber(string.format("%.1f", (tonumber(characters) or 0) / 1024))) .. "KB"
 end
 
 local function createWarning(parent)
@@ -248,6 +237,27 @@ local function selectedSnapshot(f)
     return ns.SelectSnapshot(f.snapshot, ns.GetExportOptions())
 end
 
+local function refreshCollectionStatus(f)
+    if f.generating then return end
+    local count = recordCountText
+    f.questCollectionStatus:SetShown(f.questHistoryLoading == true)
+    f.achievementCollectionStatus:SetShown(f.achievementLoading == true)
+    if f.questHistoryLoading then
+        local labels = { retrying = "Retrying quest history", sorting = "Sorting quest history",
+            names = "Reading cached quest names", refreshing = "Refreshing quest history",
+            reporting = "Preparing quest history report" }
+        f.questCollectionStatus:SetText((labels[f.questHistoryPhase] or "Collecting quest history")
+            .. " (" .. count(f.questHistoryProgress or 0) .. " so far).")
+    end
+    if f.achievementLoading then
+        local labels = { retrying = "Retrying achievement reads", refreshing = "Refreshing after achievement updates" }
+        f.achievementCollectionStatus:SetText((labels[f.achievementPhase] or "Collecting achievements")
+            .. " (" .. count(f.achievementProgress or 0) .. " so far).")
+    end
+    f.generate:SetText((f.questHistoryLoading or f.achievementLoading) and "Collecting..." or "Generate export")
+    f.exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
+end
+
 local function refreshChooser(f)
     local selectedCount = 0
     local selectedCategories = 0
@@ -257,7 +267,8 @@ local function refreshChooser(f)
         local info = ns.GetExportCategoryInfo(f.snapshot, category.key, f.format == "ai")
         local row = f.rows[category.key]
         row.check:SetChecked(checked)
-        if category.key == "achievements" and f.achievementLoading then
+        if (category.key == "achievements" and f.achievementLoading)
+            or (category.key == "questHistory" and f.questHistoryLoading) then
             row.count:SetText("|cffaaaaaaCollecting...|r")
         elseif info.unavailable then
             row.count:SetText("|cffaaaaaaUnavailable|r")
@@ -288,20 +299,13 @@ local function refreshChooser(f)
         footer = footer .. " · compressed when generated"
     end
     f.summary:SetText(footer)
-    if f.achievementLoading or f.generating then
+    if f.achievementLoading or f.questHistoryLoading or f.generating then
         f.generate:Disable()
     else
         f.generate:Enable()
     end
-    if f.achievementLoading then
-        f.generate:SetText("Collecting...")
-        f.exportWarning:SetText("|cffffc44dCollecting achievements|r ("
-            .. recordCountText(f.achievementProgress or 0) .. " so far).")
-    elseif not f.generating then
-        f.generate:SetText("Generate export")
-        f.exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
-    end
-    f.exportWarning:SetShown(f.generating or ns.IsExportEnabled("achievements"))
+    refreshCollectionStatus(f)
+    f.exportWarning:SetShown(f.generating or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
     if f.achievementScope then
         local options = ns.GetAchievementOptions()
         UIDropDownMenu_SetSelectedValue(f.achievementScope, options.scope)
@@ -314,6 +318,36 @@ local function refreshChooser(f)
     end
 end
 
+local function collectQuestHistory(f)
+    if f.cancelQuestHistory then f.cancelQuestHistory() f.cancelQuestHistory = nil end
+    f.questHistoryLoading = false
+    f.snapshot.questHistory = nil
+    f.snapshot.exportOptions.questHistory = ns.IsExportEnabled("questHistory")
+    if not ns.IsExportEnabled("questHistory") then refreshChooser(f) return end
+    f.questHistoryLoading, f.questHistoryProgress, f.questHistoryPhase = true, 0, nil
+    refreshChooser(f)
+    f.cancelQuestHistory = ns.CollectQuestHistory(function(value, err)
+        f.questHistoryLoading, f.cancelQuestHistory = false, nil
+        f.snapshot.questHistory = value
+        if err then
+            ns.Print("Could not collect quest history: " .. err)
+            f.snapshot.questHistory = { schemaVersion = 1, available = false, entries = {},
+                summary = { exported = 0, titlesExported = 0, titlesUnavailable = 0 }, absenceMeans = "unknown", capturedAt = time(),
+                scope = "client_reported_completed_quest_flags", coverage = "client_completion_flags_not_lifetime_history",
+                completionBasis = "client_reported", completionDatesAvailable = false, repeatCountsAvailable = false,
+                truncated = false, truncationReasons = {},
+                reason = "Quest history collection failed. Reopen the chooser to retry." }
+        end
+        if value and value.changedDuringCollection then
+            ns.Print("Quest completion flags changed during collection. Reopen the export chooser for a fresh capture.")
+        end
+        refreshChooser(f)
+    end, function(count, phase)
+        f.questHistoryProgress, f.questHistoryPhase = count, phase
+        refreshCollectionStatus(f)
+    end)
+end
+
 local function collectAchievements(f)
     if f.cancelAchievements then f.cancelAchievements() f.cancelAchievements = nil end
     f.achievementLoading = false
@@ -322,6 +356,7 @@ local function collectAchievements(f)
     if not ns.IsExportEnabled("achievements") then refreshChooser(f) return end
     f.achievementLoading = true
     f.achievementProgress = 0
+    f.achievementPhase = nil
     refreshChooser(f)
     f.cancelAchievements = ns.CollectAchievements(function(value, err)
         f.achievementLoading = false
@@ -339,11 +374,8 @@ local function collectAchievements(f)
         end
         refreshChooser(f)
     end, function(count, phase)
-        f.achievementProgress = count
-        local label = phase == "retrying" and "Retrying achievement reads"
-            or (phase == "refreshing" and "Refreshing after achievement updates" or "Collecting achievements")
-        f.exportWarning:SetText("|cffffc44d" .. label .. "|r ("
-            .. recordCountText(count or 0) .. " so far).")
+        f.achievementProgress, f.achievementPhase = count, phase
+        refreshCollectionStatus(f)
     end)
 end
 
@@ -450,7 +482,7 @@ local function createChooserDialog()
     intro:SetPoint("TOPLEFT", 28, -47)
     intro:SetWidth(554)
     intro:SetJustifyH("LEFT")
-    intro:SetText("Choose a destination and the categories to include. Nothing is uploaded by the addon.")
+    intro:SetText("HammerLink gathers your selected character data. On the next page, copy the results into your favourite chatbot or Consecrated Hammer.")
 
     local formatLabel = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     formatLabel:SetPoint("TOPLEFT", 28, -78)
@@ -479,7 +511,7 @@ local function createChooserDialog()
 
     local categoryScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
     categoryScroll:SetPoint("TOPLEFT", 24, -153)
-    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 105)
+    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 125)
     local categoryContent = CreateFrame("Frame", nil, categoryScroll)
     f.categories = visibleExportCategories()
     categoryContent:SetSize(510, math.max(410, #f.categories * 45 + 115))
@@ -522,7 +554,9 @@ local function createChooserDialog()
         end
         check:SetScript("OnClick", function(self)
             ns.db.options[category.key] = self:GetChecked() and true or false
-            if category.key == "achievements" then collectAchievements(f) else refreshChooser(f) end
+            if category.key == "achievements" then collectAchievements(f)
+            elseif category.key == "questHistory" then collectQuestHistory(f)
+            else refreshChooser(f) end
         end)
         f.rows[category.key] = { check = check, icon = categoryIcon, detail = detail, count = count, warning = warning, actionNotice = actionNotice }
     end
@@ -574,6 +608,17 @@ local function createChooserDialog()
     exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
     f.exportWarning = exportWarning
 
+    local function collectionLine(offset)
+        local line = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        line:SetPoint("BOTTOMLEFT", summary, "TOPLEFT", 0, offset)
+        line:SetWidth(550)
+        line:SetJustifyH("LEFT")
+        line:Hide()
+        return line
+    end
+    f.achievementCollectionStatus = collectionLine(8)
+    f.questCollectionStatus = collectionLine(26)
+
     local reset = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     reset:SetSize(108, 24)
     reset:SetPoint("BOTTOMLEFT", 28, 23)
@@ -581,7 +626,9 @@ local function createChooserDialog()
     reset:SetScript("OnClick", function()
         ns.ResetExportOptions()
         ns.db.options.achievements = true
+        ns.db.options.questHistory = true
         collectAchievements(f)
+        collectQuestHistory(f)
         ns.Print("all export categories enabled")
     end)
 
@@ -598,13 +645,20 @@ local function createChooserDialog()
     end
     f:SetScript("OnHide", function()
         if f.cancelExport then f.cancelExport() end
+        if f.cancelQuestHistory then f.cancelQuestHistory() f.cancelQuestHistory = nil end
+        if f.cancelAchievements then f.cancelAchievements() f.cancelAchievements = nil end
+        f.questHistoryLoading, f.achievementLoading = false, false
         finishGeneration()
     end)
     generate:SetScript("OnClick", function()
         if f.generating then return end
+        if f.questHistoryLoading then ns.Print("Quest history is still being collected. Try again in a moment.") return end
         if f.achievementLoading then ns.Print("Achievements are still being collected. Try again in a moment.") return end
         if ns.IsExportEnabled("achievements") and not f.snapshot.achievements then
             ns.Print("Achievements could not be collected. Retry or switch off achievements.") return
+        end
+        if ns.IsExportEnabled("questHistory") and not f.snapshot.questHistory then
+            ns.Print("Quest history could not be collected. Retry or switch off quest history.") return
         end
         local snapshot = selectedSnapshot(f)
         local ok, output, _, exportedSnapshot
@@ -661,5 +715,6 @@ function ns.ShowExport()
     chooserDialog.snapshot = snapshot
     chooserDialog.format = ns.GetExportFormat()
     collectAchievements(chooserDialog)
+    collectQuestHistory(chooserDialog)
     chooserDialog:Show()
 end

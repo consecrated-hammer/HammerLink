@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-17
+
+### Added
+
+- Export quest history alongside the current quest log: all completed quest IDs
+  reported by the client, with cached names where available. Collection runs
+  across frames with progress and cancellation. Large exports drop names
+  before any quest IDs. Missing IDs remain unknown; completion dates and
+  repeat counts are not inferred.
+
+### Changed
+
+- Show separate progress lines when collecting quests and achievements together.
+- Format display counts with commas in the chooser, reports and export messages.
+- Left-click the minimap icon to open the exporter; right-click to open settings.
+- Explain the copy step in the chooser and describe all categories as selectable.
+
 ## [0.10.2] - 2026-10-14
 
 ### Changed

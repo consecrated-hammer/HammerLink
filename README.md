@@ -21,7 +21,7 @@ HammerLink exports your character's live data from the game, either as a readabl
 
 ## Getting started
 
-Install, then right-click the minimap button or type `/hl export` to open the export chooser. Pick a format, tick the categories you want, and copy the result.
+Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon to open settings. Every category is optional. Pick a format, tick the categories you want, and copy the result.
 
 ## Commands
 
@@ -46,10 +46,24 @@ Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `st
 | Current reputations | Visible faction standings and progress |
 | Housing decor | Owned decor, with stored, placed and redeemable counts |
 | Current quest log | Objective progress, quest types, timers and map waypoints |
+| Quest history | Every completed quest ID reported by this client, with names where available |
 | Learned recipes and techniques | Recipes, gathering techniques and bonuses, once you've opened that profession's window |
-| Achievements (optional) | Explicit complete/incomplete states, dates, category IDs and criteria progress |
+| Achievements | Explicit complete/incomplete states, dates, category IDs and criteria progress |
 
 On WoW Forever, the Great Vault, Housing decor and currency categories aren't offered because Forever doesn't have them, and spec and item level are left out of the character details. The talent string is included when the client provides one.
+
+## Quest history
+
+Tick **Quest history** in the export chooser to include completed quest flags
+alongside your current quest log. It starts off and collects across frames,
+with progress and cancellation. Missing names never discard quest IDs. Large
+exports fall back to IDs and completion status so the history stays intact.
+
+This is the client's current completion record, including any hidden,
+alternate or resettable quest flags it exposes. It cannot reconstruct
+completion dates or repeatable turn-in counts, and absent IDs remain unknown.
+See the [quest history contract](https://github.com/consecrated-hammer/HammerLink/blob/main/docs/quest-history.md)
+for coverage and client checks.
 
 ## Achievement planning
 

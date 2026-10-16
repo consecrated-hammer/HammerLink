@@ -1,9 +1,9 @@
 ## Interface: 16001
 ## Title: HammerLink (WoW Forever)
-## Notes: WoW Forever (Camelot) build using HammerLink's Mainline backend.
+## Notes: Export selected character data, including gear, quests and achievements, for Consecrated Hammer or your favourite chatbot.
 ## Author: consecrated-hammer
-## Version: 0.10.2
-## X-ReleaseDate: 2026-10-14
+## Version: 0.11.0
+## X-ReleaseDate: 2026-10-17
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
 ## LoadSavedVariablesFirst: 1
@@ -22,8 +22,10 @@ Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
 Libs\HammerCore\HammerCore.xml
 Core.lua
+Numbers.lua
 Setup.lua
 Achievements.lua
+QuestHistory.lua
 Export.lua
 UI.lua
 Options.lua

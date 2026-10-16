@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.8.2"
+ns.VERSION = "0.11.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
@@ -21,6 +21,7 @@ local DEFAULT_OPTIONS = {
     questLog = true,
     professionRecipes = true,
     achievements = false,
+    questHistory = false,
 }
 
 function ns.IsForeverClient()
@@ -44,7 +45,7 @@ function ns.GetExportOptions()
 end
 
 function ns.IsExportEnabled(category)
-    if category == "achievements" then return ns.GetExportOptions()[category] == true end
+    if category == "achievements" or category == "questHistory" then return ns.GetExportOptions()[category] == true end
     return ns.IsExportSupported(category) and ns.GetExportOptions()[category] ~= false
 end
 

@@ -1,8 +1,8 @@
 local addonName, ns = ...
 local HC = ns.HammerCore
 
--- Declares HammerLink to HammerCore: commands, the minimap right-click
--- (export), status, diagnostics and About.  The export chooser stays
+-- Declares HammerLink to HammerCore: commands, the minimap clicks
+-- (export and settings), status, diagnostics and About.  The export chooser stays
 -- HammerLink's own main tool; settings are HammerCore's window.
 
 local aboutTips = {
@@ -29,8 +29,10 @@ HC:Init({
     clientLabel = function() return ns.IsForeverClient() and "WoW Forever" or "Retail" end,
     minimap = {
         icon = "Interface\\AddOns\\HammerLink\\Textures\\HammerLinkClean",
-        rightClick = function() ns.ShowExport() end,
-        rightClickLabel = "export",
+        leftClick = function() ns.ShowExport() end,
+        leftClickLabel = "export",
+        rightClick = function() HC.Settings:Toggle() end,
+        rightClickLabel = "settings",
     },
     status = function()
         local recipes = ns.GetProfessionRecipes and ns.GetProfessionRecipes() or nil

@@ -62,8 +62,8 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     ns.ShowExport = function() opened = opened + 1 end
     SlashCmdList.HAMMERLINK("export")
     equal(opened, 1, toc .. ": export opens the chooser")
-    wow.Click(HC.Minimap.button, "RightButton")
-    equal(opened, 2, toc .. ": right-clicking the minimap button opens the chooser")
+    wow.Click(HC.Minimap.button, "LeftButton")
+    equal(opened, 2, toc .. ": left-clicking the minimap button opens the chooser")
 
     SlashCmdList.HAMMERLINK("debug")
     equal(HC.Copy.frame.edit:GetText():find("Export format:", 1, true) ~= nil, true,

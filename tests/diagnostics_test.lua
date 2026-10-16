@@ -30,6 +30,7 @@ Minimap = {
 }
 GetBuildInfo = function() return nil, nil, nil, 120100 end
 
+assert(loadfile("Numbers.lua"))("HammerLink", namespace)
 assert(loadfile("Diagnostics.lua"))("HammerLink", namespace)
 local report = namespace.BuildDiagnosticReport()
 -- HammerCore's report header carries the version; this adds HammerLink's lines.
