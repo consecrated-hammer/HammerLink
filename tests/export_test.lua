@@ -570,3 +570,30 @@ local countReport = namespace.BuildAIReport(completeSnapshot)
 assert(countReport:find("currency ID 123456", 1, true))
 assert(countReport:find("current amount 123,456,789", 1, true))
 assert(countReport:find("holding cap 987,654,321", 1, true))
+
+-- Saved storage must survive selection and both output formats.
+namespace.GetStorage = function(category)
+    return { schemaVersion = 1, available = true, scope = category == "guildBank" and "guild_bank" or category == "warbandBank" and "account_bank" or "character_bank",
+        capturedAt = 1787200000, cached = true, partial = true, absenceMeans = "unknown",
+        observedBy = "retail:Player-test", coverage = "client_observed_slots",
+        entries = { { itemID = 76543, name = "Saved cloth", stackCount = 17, bag = 2, tab = 2, slot = 4 } },
+        tabs = { { id = 2, name = "Crafting", status = "observed", capturedAt = 1787200000 } } }
+end
+local withStorage = namespace.BuildSnapshot({ bank = true, warbandBank = true, guildBank = true })
+assert(withStorage.bank.entries[1].stackCount == 17)
+local storageReport = namespace.BuildAIReport(withStorage)
+assert(storageReport:find("## Character bank", 1, true) and storageReport:find("## Warband Bank", 1, true))
+assert(storageReport:find("Saved cloth", 1, true) and storageReport:find("quantity 17", 1, true))
+assert(storageReport:find("Saved observations", 1, true) and storageReport:find("**Partial:**", 1, true))
+local kept = namespace.SelectSnapshot(withStorage, { bank = true, warbandBank = false, guildBank = false, voidStorage = false })
+assert(kept.bank == withStorage.bank and not kept.warbandBank and not kept.guildBank)
+local storageCode = namespace.BuildExport(kept)
+local storageJSON = lib:DecompressDeflate(lib:DecodeForPrint(storageCode:sub(5)))
+assert(storageJSON:find('"bank":', 1, true) and storageJSON:find('"itemID":76543', 1, true))
+assert(not storageJSON:find('"guildBank":{', 1, true))
+local fixturePath = os.getenv("HAMMERLINK_STORAGE_FIXTURE")
+if fixturePath then
+    local file = assert(io.open(fixturePath, "w"))
+    file:write(storageCode) file:close()
+end
+print("HammerLink storage export integration tests passed")

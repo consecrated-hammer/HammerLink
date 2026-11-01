@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.11.0"
+ns.VERSION = "0.12.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
@@ -11,6 +11,10 @@ local DEFAULT_EXPORT_FORMAT = "ai"
 local DEFAULT_OPTIONS = {
     equipment = true,
     bagItems = true,
+    bank = true,
+    warbandBank = true,
+    guildBank = true,
+    voidStorage = true,
     currentSpellbook = true,
     talents = true,
     vault = true,
@@ -33,6 +37,10 @@ function ns.IsForeverClient()
 end
 
 function ns.IsExportSupported(category)
+    if category == "voidStorage" then return type(GetVoidItemInfo) == "function" end
+    if category == "warbandBank" then
+        return C_Bank ~= nil and type(C_Bank.FetchPurchasedBankTabData) == "function" and Enum ~= nil and Enum.BankType ~= nil and Enum.BankType.Account ~= nil
+    end
     -- Forever has neither Housing, the Great Vault, nor confirmed support for the Retail wallet APIs.
     -- Omit those systems
     -- entirely rather than showing misleading unavailable export choices.

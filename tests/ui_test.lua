@@ -10,10 +10,11 @@ namespace.IsExportSupported = function() return true end
 namespace.IsForeverClient = function() return false end
 
 local categories = {
-    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
+    "equipment", "bagItems", "bank", "warbandBank", "guildBank", "voidStorage", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
     "decorInventory", "questLog", "professionRecipes",
 }
 local counts = {
+    bank = 2, warbandBank = 3, guildBank = 4, voidStorage = 1,
     equipment = 15, bagItems = 118, currentSpellbook = 96, talents = 1, vault = 8,
     currencyCaps = 6, currencies = 14, reputations = 42, decorInventory = 666, questLog = 24,
     professionRecipes = 142,
@@ -59,6 +60,7 @@ local function widget(kind, name, template)
     function value:SetChecked(checked) self.checked = checked and true or false end
     function value:GetChecked() return self.checked end
     function value:SetScript(event, callback) self.scripts[event] = callback end
+    function value:IsShown() return self.shown end
     function value:Show() self.shown = true end
     function value:Hide() self.shown = false if self.scripts.OnHide then self.scripts.OnHide() end end
     function value:SetShown(shown) self.shown = shown end
@@ -203,7 +205,7 @@ assert(chooser.rows.bagItems.count.text:find("118 records", 1, true), "expected 
 assert(chooser.rows.talents.count.text:find("1 record", 1, true), "expected singular per-category count wording")
 assert(namespace.FormatCount(123456789) == "123,456,789", "counts use comma grouping")
 assert(namespace.FormatCount(-12345.5) == "-12,345.5", "fractional signed amounts retain their value")
-assert(chooser.summary.text:find("records across 11 categories", 1, true), "expected live selected-record total")
+assert(chooser.summary.text:find("records across 15 categories", 1, true), "expected live selected-record total")
 assert(chooser.summary.text:find("about ", 1, true) and chooser.summary.text:find("KB", 1, true), "expected an approximate report size in KB")
 assert(not chooser.summary.text:find("characters", 1, true), "expected the raw character estimate to be hidden")
 assert(chooser.categoryScroll and chooser.categoryScroll.scrollChild == chooser.categoryContent, "expected a native scroll area for export categories")
@@ -248,7 +250,7 @@ local bagCheck = chooser.rows.bagItems.check
 bagCheck:SetChecked(false)
 bagCheck.scripts.OnClick(bagCheck)
 assert(namespace.db.options.bagItems == false, "expected category selection to persist")
-assert(chooser.summary.text:find("records across 10 categories", 1, true), "expected total to react to category changes")
+assert(chooser.summary.text:find("records across 14 categories", 1, true), "expected total to react to category changes")
 
 local generate
 for _, frame in ipairs(frames) do
@@ -402,3 +404,16 @@ assert(chooser.snapshot.questHistory.available == false and generate.enabled,
 historyCheck:SetChecked(false)
 historyCheck.scripts.OnClick(historyCheck)
 print("HammerLink UI tests passed")
+
+namespace.StorageProgress = { bank = { active = true, processed = 0, queued = true } }
+namespace.StorageChanged()
+assert(chooser.storageLoading and not generate.enabled, "queued selected storage disables generation before reads start")
+namespace.StorageProgress = { bank = { active = true, processed = 80 } }
+namespace.StorageChanged()
+assert(chooser.storageLoading and not generate.enabled, "selected storage scan disables export generation")
+assert(chooser.rows.bank.count.text:find("80 slots", 1, true), "the chooser shows storage slot progress")
+assert(chooser.exportWarning.text:find("Keep the storage window open", 1, true))
+namespace.StorageProgress = {}
+namespace.StorageChanged()
+assert(not chooser.storageLoading and generate.enabled, "finishing storage re-enables generation")
+print("HammerLink storage progress UI tests passed")

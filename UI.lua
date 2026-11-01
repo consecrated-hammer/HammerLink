@@ -154,6 +154,10 @@ end
 local exportCategories = {
     { key = "equipment", title = "Equipped gear", icon = "Interface\\Icons\\INV_Chest_Chain_05", detail = "Current equipment links and slots." },
     { key = "bagItems", title = "Bag items", icon = "Interface\\Buttons\\Button-Backpack-Up", detail = "Every occupied backpack, bag and reagent-bag slot." },
+    { key = "bank", title = "Character bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest01", detail = "Open the bank to refresh. Includes legacy bank bags and reagent storage where present." },
+    { key = "warbandBank", title = "Warband Bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Shared account storage. Open the bank to refresh the saved observation." },
+    { key = "guildBank", title = "Guild bank", icon = "Interface\\Icons\\INV_Misc_Coin_01", detail = "Shared guild storage. Visit each viewable tab to refresh; withdrawal rights are not inferred." },
+    { key = "voidStorage", title = "Void storage", icon = "Interface\\Icons\\INV_Misc_Bag_10", detail = "Open void storage to refresh, on clients that still provide it." },
     { key = "currentSpellbook", title = "Current spellbook", icon = "Interface\\Icons\\INV_Misc_Book_09", detail = "General, class and active-specialisation spells currently exposed by the client." },
     { key = "talents", title = "Active talents", icon = "Interface\\Icons\\INV_Misc_Book_11", detail = "The active talent import string when the client exposes it." },
     { key = "vault", title = "Great Vault", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Exact current in-game Vault progress and generated rewards." },
@@ -254,11 +258,12 @@ local function refreshCollectionStatus(f)
         f.achievementCollectionStatus:SetText((labels[f.achievementPhase] or "Collecting achievements")
             .. " (" .. count(f.achievementProgress or 0) .. " so far).")
     end
-    f.generate:SetText((f.questHistoryLoading or f.achievementLoading) and "Collecting..." or "Generate export")
+    f.generate:SetText((f.questHistoryLoading or f.achievementLoading or f.storageLoading) and "Collecting..." or "Generate export")
     f.exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
 end
 
 local function refreshChooser(f)
+    f.storageLoading = false
     local selectedCount = 0
     local selectedCategories = 0
     local selectedCharacters = 1000
@@ -267,7 +272,11 @@ local function refreshChooser(f)
         local info = ns.GetExportCategoryInfo(f.snapshot, category.key, f.format == "ai")
         local row = f.rows[category.key]
         row.check:SetChecked(checked)
-        if (category.key == "achievements" and f.achievementLoading)
+        local storageProgress = ns.StorageProgress and ns.StorageProgress[category.key]
+        if checked and storageProgress and storageProgress.active then f.storageLoading = true end
+        if storageProgress and storageProgress.active then
+            row.count:SetText("|cffaaaaaaReading " .. ns.FormatCount(storageProgress.processed) .. " slots|r")
+        elseif (category.key == "achievements" and f.achievementLoading)
             or (category.key == "questHistory" and f.questHistoryLoading) then
             row.count:SetText("|cffaaaaaaCollecting...|r")
         elseif info.unavailable then
@@ -299,13 +308,14 @@ local function refreshChooser(f)
         footer = footer .. " · compressed when generated"
     end
     f.summary:SetText(footer)
-    if f.achievementLoading or f.questHistoryLoading or f.generating then
+    if f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating then
         f.generate:Disable()
     else
         f.generate:Enable()
     end
     refreshCollectionStatus(f)
-    f.exportWarning:SetShown(f.generating or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
+    if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
+    f.exportWarning:SetShown(f.storageLoading or f.generating or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
     if f.achievementScope then
         local options = ns.GetAchievementOptions()
         UIDropDownMenu_SetSelectedValue(f.achievementScope, options.scope)
@@ -316,6 +326,17 @@ local function refreshChooser(f)
             and "Choose this client's current expansion categories. Descendants are included."
             or "Missing achievements remain unknown. Incomplete criteria are included.")
     end
+end
+
+-- Storage reads run independently while the relevant game window is open.
+-- Replace captured tables only; exports already generating keep their selection.
+function ns.StorageChanged(category, updated)
+    local f = chooserDialog
+    if not f or not f.snapshot or not f:IsShown() or f.generating then return end
+    if updated and category and ns.IsExportSupported(category) and ns.GetStorage then
+        f.snapshot[category] = ns.GetStorage(category)
+    end
+    refreshChooser(f)
 end
 
 local function collectQuestHistory(f)
@@ -652,6 +673,7 @@ local function createChooserDialog()
     end)
     generate:SetScript("OnClick", function()
         if f.generating then return end
+        if f.storageLoading then ns.Print("Storage is still being read. Keep its window open and try again shortly.") return end
         if f.questHistoryLoading then ns.Print("Quest history is still being collected. Try again in a moment.") return end
         if f.achievementLoading then ns.Print("Achievements are still being collected. Try again in a moment.") return end
         if ns.IsExportEnabled("achievements") and not f.snapshot.achievements then

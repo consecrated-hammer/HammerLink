@@ -39,6 +39,10 @@ Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `st
 | Character | Name, realm, class, spec and item level at capture time |
 | Equipped gear | Item links, including modifiers |
 | Bag items | Every occupied backpack, bag and reagent bag slot, with stack size, quality, binding, item level, gems and stats where available |
+| Character bank | Saved bank contents, including bank bags or tabs and legacy reagent storage where supported |
+| Warband Bank | Saved account-bank contents, labelled as shared account storage |
+| Guild bank | Saved contents of visited, viewable tabs, labelled as shared guild storage |
+| Void storage | Saved contents on clients that still provide it |
 | Current spellbook | Spell IDs, skill lines, passive and off-spec flags, and flyouts |
 | Active talents | The talent import string |
 | Great Vault | Activities, thresholds, progress, tiers and generated rewards |
@@ -51,6 +55,24 @@ Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `st
 | Achievements | Explicit complete/incomplete states, dates, category IDs and criteria progress |
 
 On WoW Forever, the Great Vault, Housing decor and currency categories aren't offered because Forever doesn't have them, and spec and item level are left out of the character details. The talent string is included when the client provides one.
+
+## Stored items
+
+Open your bank, let its contents load, then reopen `/hl export`. For the guild
+bank, visit each tab you can view. HammerLink saves those observations per
+character and keeps Retail and Forever separate. Each storage category starts
+enabled and can be unticked in the chooser. Both output formats retain item
+IDs, quantities, locations, available names and links, capture times and
+coverage flags. Items whose names haven't loaded still keep their IDs.
+
+These are saved observations. Shared storage can change while you're away;
+missing items and unvisited tabs stay unknown. Older tab observations keep
+their own timestamps when a tab cannot refresh, and guild visibility doesn't
+imply permission to withdraw. Retail's former void storage and reagent bank
+contents are part of the character bank. A separate void-storage choice only
+appears when the client provides its API.
+
+See the [storage contract](docs/storage.md) for client compatibility and checks.
 
 ## Quest history
 

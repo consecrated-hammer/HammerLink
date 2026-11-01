@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] - 2026-11-01
+
+### Added
+
+- Export saved character-bank, Warband Bank and guild-bank observations in
+  compact codes and AI-readable reports. Retail and Forever use the client’s
+  purchased bank tab IDs and capacities. Guild tabs are captured as you visit
+  them, with unknown and inaccessible tabs marked explicitly.
+- Keep storage observations separate by character and client, with capture
+  times, shared-storage scope and partial-coverage flags. Legacy bank bags,
+  reagent storage and void storage are supported when the client provides them.
+- Collect storage across frames with slot progress in the chooser. Closing the
+  storage window cancels unfinished reads and keeps the last saved observation.
 
 ## [0.11.0] - 2026-10-17
 

@@ -2,8 +2,8 @@
 ## Title: HammerLink (WoW Forever)
 ## Notes: Export selected character data, including gear, quests and achievements, for Consecrated Hammer or your favourite chatbot.
 ## Author: consecrated-hammer
-## Version: 0.11.0
-## X-ReleaseDate: 2026-10-17
+## Version: 0.12.0
+## X-ReleaseDate: 2026-11-01
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
 ## LoadSavedVariablesFirst: 1
@@ -26,6 +26,7 @@ Numbers.lua
 Setup.lua
 Achievements.lua
 QuestHistory.lua
+Storage.lua
 Export.lua
 UI.lua
 Options.lua

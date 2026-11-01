@@ -599,11 +599,14 @@ local function questLog()
 end
 
 local CATEGORY_ORDER = {
-    "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
+    "equipment", "bagItems", "bank", "warbandBank", "guildBank", "voidStorage", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations",
     "decorInventory", "questLog", "questHistory", "professionRecipes", "achievements",
 }
 
+local STORAGE_CATEGORIES = { bank = true, warbandBank = true, guildBank = true, voidStorage = true }
+
 local CATEGORY_FIELDS = {
+    bank = "bank", warbandBank = "warbandBank", guildBank = "guildBank", voidStorage = "voidStorage",
     equipment = "equipment", bagItems = "bagEquipment", currentSpellbook = "currentSpellbook", talents = "talents",
     vault = "vault", currencyCaps = "currencyCaps", currencies = "currencies", reputations = "reputations",
     decorInventory = "decorInventory", questLog = "questLog", questHistory = "questHistory",
@@ -612,6 +615,7 @@ local CATEGORY_FIELDS = {
 }
 
 local CATEGORY_TITLES = {
+    bank = "Character bank", warbandBank = "Warband Bank", guildBank = "Guild bank", voidStorage = "Void storage",
     equipment = "Equipped gear", bagItems = "Bag items", currentSpellbook = "Current spellbook", talents = "Active talents",
     vault = "Great Vault", currencyCaps = "Currency caps", currencies = "Current currencies", reputations = "Current reputations",
     decorInventory = "Housing decor inventory", questLog = "Current quest log", questHistory = "Quest history",
@@ -642,6 +646,12 @@ function ns.BuildSnapshot(options)
     if client then snapshot.client = client end
     if selected.equipment then snapshot.equipment = equipment() end
     if selected.bagItems then snapshot.bagEquipment = bagEquipment() end
+    for category in pairs(STORAGE_CATEGORIES) do
+        if selected[category] then
+            snapshot[category] = ns.GetStorage and ns.GetStorage(category)
+                or { available = false, entries = {}, reason = "Storage collection is unavailable." }
+        end
+    end
     if selected.currentSpellbook then snapshot.currentSpellbook = currentSpellbook() end
     if selected.talents then
         local importString = talentExport()
@@ -713,6 +723,11 @@ function ns.FormatExportSummary(snapshot)
     end
     add("equipped", options.equipment, #(snapshot.equipment or {}))
     add("bag items", options.bagItems, #(snapshot.bagEquipment or {}))
+    for _, category in ipairs({ "bank", "warbandBank", "guildBank", "voidStorage" }) do
+        local storage = snapshot[category]
+        add(CATEGORY_TITLES[category], options[category], storage and #(storage.entries or {}) or 0,
+            not storage or storage.available == false)
+    end
     local spellbook = snapshot.currentSpellbook
     add("current spells", options.currentSpellbook, spellbook and #(spellbook.spells or {}) or 0, spellbook and spellbook.available == false)
     add("talents", options.talents, snapshot.talents and snapshot.talents.importString and 1 or 0)
@@ -814,6 +829,7 @@ local function itemLine(item, location)
 end
 
 local function categoryCount(snapshot, category)
+    if STORAGE_CATEGORIES[category] then return snapshot[category] and #(snapshot[category].entries or {}) or 0 end
     if category == "questHistory" then return snapshot.questHistory and #snapshot.questHistory.entries or 0 end
     if category == "achievements" then return snapshot.achievements and #snapshot.achievements.entries or 0 end
     if category == "equipment" then return #(snapshot.equipment or {}) end
@@ -836,6 +852,7 @@ end
 local function categoryUnavailable(snapshot, category)
     local field = CATEGORY_FIELDS[category]
     local value = snapshot[field]
+    if STORAGE_CATEGORIES[category] then return not value or value.available == false end
     if category == "achievements" or category == "questHistory" then return not value or value.available == false end
     if category == "talents" then return not (value and value.importString) end
     if category == "vault" then
@@ -920,7 +937,20 @@ function buildSection(snapshot, category)
         return table.concat(lines, "\n")
     end
 
-    if category == "equipment" then
+    if STORAGE_CATEGORIES[category] then
+        local storage = snapshot[category]
+        append(lines, "_Scope: " .. plain(storage.scope) .. ". Saved observations, not a live inventory. Missing items and unobserved tabs stay unknown._")
+        append(lines, "- Last observation: " .. capturedTime(storage.capturedAt))
+        if storage.guildName then append(lines, "- Guild: " .. plain(storage.guildName)) end
+        if storage.partial then append(lines, "- **Partial:** some tabs or slots are unobserved or unavailable.") end
+        for _, tab in ipairs(storage.tabs or {}) do
+            append(lines, "- Tab " .. tostring(tab.id) .. ": " .. plain(tab.name or "") .. "; " .. plain(tab.status)
+                .. (tab.capturedAt and ("; observed " .. capturedTime(tab.capturedAt)) or ""))
+        end
+        for _, item in ipairs(storage.entries or {}) do
+            append(lines, itemLine(item, "Tab/bag " .. tostring(item.tab or item.bag or "?") .. ", slot " .. tostring(item.slot or "?")))
+        end
+    elseif category == "equipment" then
         for _, item in ipairs(snapshot.equipment or {}) do
             append(lines, itemLine(item, item.slot or "Unknown slot"))
         end

@@ -33,7 +33,7 @@ namespace.HammerCore = { Start = function() namespace.started = true end,
     Print = function(message) messages[#messages + 1] = message end }
 assert(loadfile("Numbers.lua"))("HammerLink", namespace)
 assert(loadfile("Core.lua"))("HammerLink", namespace)
-assert(namespace.VERSION == "0.11.0", "expected the visible addon version")
+assert(namespace.VERSION == "0.12.0", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
 assert(namespace.started, "expected HammerCore to start once saved variables load")
@@ -55,3 +55,12 @@ assert(secondCharacter.available == false, "expected profession cache to stay sc
 
 -- Commands, help and the startup message are HammerCore's; see addon_test.lua.
 print("HammerLink core tests passed")
+
+GetBuildInfo = function() return "1.60.1", "build", "date", 16001 end
+C_Bank = { FetchPurchasedBankTabData = function() return {} end }
+Enum = { BankType = { Character = 0, Account = 2 } }
+assert(namespace.IsForeverClient() and namespace.IsExportSupported("bank") and namespace.IsExportSupported("warbandBank"),
+    "Forever supports character and account bank export")
+assert(not namespace.IsExportSupported("voidStorage"), "void storage is hidden when its API is absent")
+C_Bank.FetchPurchasedBankTabData = nil
+assert(not namespace.IsExportSupported("warbandBank"), "unreadable account banks must not be offered")

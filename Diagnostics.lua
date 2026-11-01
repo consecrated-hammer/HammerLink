@@ -19,7 +19,7 @@ function ns.BuildDiagnosticReport()
     local db = ns.db or {}
     local button = ns.HammerCore.Minimap.button
     local supported, enabled = {}, {}
-    for _, category in ipairs({ "equipment", "bagItems", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations", "decorInventory", "questLog", "professionRecipes" }) do
+    for _, category in ipairs({ "equipment", "bagItems", "bank", "warbandBank", "guildBank", "voidStorage", "currentSpellbook", "talents", "vault", "currencyCaps", "currencies", "reputations", "decorInventory", "questLog", "professionRecipes" }) do
         if ns.IsExportSupported(category) then
             supported[#supported + 1] = category
             if ns.IsExportEnabled(category) then enabled[#enabled + 1] = category end
