@@ -114,7 +114,7 @@ assert(not ns.GetStorage("guildBank").available, "opening a guild bank is not pr
 event("GUILDBANKBAGSLOTS_CHANGED") drain()
 local gb = ns.GetStorage("guildBank")
 assert(gb.available and gb.partial and #gb.entries == 1 and gb.entries[1].stackCount == 8)
-assert(gb.tabs[2].status == "unobserved" and gb.tabs[3].status == "not_viewable")
+assert(gb.tabs[2].status == "partial" and gb.tabs[2].reason and gb.tabs[3].status == "not_viewable")
 currentTab = 2
 event("GUILDBANKBAGSLOTS_CHANGED") drain()
 gb = ns.GetStorage("guildBank")
@@ -205,3 +205,205 @@ assert(ns.StorageProgress.bank == progress)
 drain()
 assert(ns.GetStorage("bank").tabs[2].status == "observed")
 print("HammerLink mixed-age tabs and unrelated bag-update regressions passed")
+
+-- Retail opens guild-bank windows through the interaction manager. The first
+-- tab can already be cached without another item-change event after opening.
+event("BANKFRAME_CLOSED") event("GUILDBANKFRAME_CLOSED")
+Enum.PlayerInteractionType = { GuildBanker = 10, Banker = 8 }
+player, guild, currentTab, guildLoaded = "Retail-modern-guild", "Guild A", 1, true
+canView[1] = true
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+assert(ns.StorageProgress.guildBank and ns.StorageProgress.guildBank.queued,
+    "Retail interaction-manager guild open must queue its own initial scan")
+drain()
+assert(ns.GetStorage("guildBank").available and #ns.GetStorage("guildBank").entries == 1,
+    "initial cached guild contents must be captured without an item-change event")
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+assert(not ns.StorageProgress.guildBank)
+print("HammerLink Retail interaction-manager guild-bank regression passed")
+
+local function stepTimers()
+    local ready = timers timers = {}
+    for _, fn in ipairs(ready) do fn() end
+end
+-- Identity, tab metadata and permissions can arrive after the open event.
+player, guild = "Retail-late-guild-data", nil
+local totalReady = false
+function GetNumGuildBankTabs() return totalReady and 3 or 0 end
+canView[1], canView[2] = false, false
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+stepTimers()
+assert(ns.StorageProgress.guildBank.queued and not ns.GetStorage("guildBank").available)
+guild = "Guild A"
+stepTimers()
+assert(ns.StorageProgress.guildBank.queued, "missing purchased-tab data should retry")
+totalReady = true
+stepTimers()
+assert(ns.StorageProgress.guildBank.queued, "unready view permission should retry")
+canView[1], canView[2] = true, true
+drain()
+assert(ns.GetStorage("guildBank").available, "late metadata must be captured without another item event")
+-- The legacy event may follow the modern one for the same visit.
+currentTab = 2
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+event("GUILDBANKFRAME_OPENED") drain()
+assert(ns.GetStorage("guildBank").tabs[1].status == "observed", "duplicate open events must keep this visit's observed tabs")
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.Banker)
+currentTab = 1
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+assert(not ns.StorageProgress.guildBank and ns.GetStorage("guildBank").available, "unrelated interaction hide cannot close a guild visit")
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+-- Cancel pending retries and multi-frame reads on close.
+player, totalReady = "Retail-guild-close-before-ready", false
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+stepTimers()
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+drain()
+assert(not ns.StorageProgress.guildBank and not ns.GetStorage("guildBank").available)
+player, totalReady = "Retail-guild-close-during-read", true
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+stepTimers()
+assert(ns.StorageProgress.guildBank.processed == 40)
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+drain()
+assert(not ns.StorageProgress.guildBank and not ns.GetStorage("guildBank").available)
+-- Exhausted retries stop progress; metadata events can start a fresh attempt.
+player, totalReady = "Retail-guild-retry-bound", false
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+drain()
+assert(not ns.StorageProgress.guildBank and not ns.GetStorage("guildBank").available, "unready guild data cannot wait indefinitely")
+totalReady = true
+event("GUILDBANK_UPDATE_TABS") drain()
+assert(ns.GetStorage("guildBank").available, "metadata-only updates must recover the first observation")
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+-- Retain legacy client compatibility when the interaction enum isn't present.
+Enum.PlayerInteractionType, forever, player = nil, true, "Forever-legacy-guild-open"
+event("GUILDBANKFRAME_OPENED") drain()
+assert(ns.GetStorage("guildBank").available, "Forever legacy open must capture initial contents too")
+event("GUILDBANKFRAME_CLOSED")
+print("HammerLink guild-open retries, duplicate events, cancellation and Forever compatibility passed")
+
+-- Metadata and roster notifications must not starve an active item read or
+-- recapture a tab that this visit has already observed.
+Enum.PlayerInteractionType = { GuildBanker = 10, Banker = 8 }
+forever, player, currentTab = false, "Retail-guild-roster-traffic", 1
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+stepTimers()
+local reading = ns.StorageProgress.guildBank
+assert(reading and reading.processed == 40)
+for i = 1, 20 do event("GUILD_ROSTER_UPDATE") event("GUILDBANK_UPDATE_TABS") end
+assert(ns.StorageProgress.guildBank == reading, "metadata notifications must not restart the active scan")
+drain()
+local captured = ns.GetStorage("guildBank").capturedAt
+now = now + 10
+event("GUILD_ROSTER_UPDATE") event("GUILDBANK_UPDATE_TABS") drain()
+assert(ns.GetStorage("guildBank").capturedAt == captured, "metadata-only updates cannot invent a fresh item observation")
+event("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", Enum.PlayerInteractionType.GuildBanker)
+local notices = 0
+local storageChanged = ns.StorageChanged
+ns.StorageChanged = function() notices = notices + 1 end
+event("GUILD_ROSTER_UPDATE")
+assert(notices == 0, "roster updates away from the bank must not rebuild the chooser")
+ns.StorageChanged = storageChanged
+print("HammerLink guild metadata traffic and idle-chooser regressions passed")
+
+-- Baganator's Everything view is game tab 1 while data for several tabs is
+-- already readable. Export all viewable tabs without requiring UI selection.
+event("GUILDBANKFRAME_CLOSED")
+forever, player, guild, currentTab, totalReady = false, "Baganator-everything", "Guild A", 1, true
+canView[1], canView[2], canView[3] = true, true, false
+function GetGuildBankItemInfo(tab, slot)
+    if slot == 1 then return 134400, tab+1, false, false, 2 end
+end
+function GetGuildBankItemLink(tab, slot)
+    if slot == 1 then return "|Hitem:" .. (900+tab) .. "|h[Cached guild item]|h" end
+end
+event("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.GuildBanker)
+drain()
+local everything = ns.GetStorage("guildBank")
+assert(#everything.entries == 2 and everything.entries[2].tab == 2,
+    "Everything must include readable nonselected tabs without requiring another visit")
+
+-- Selection changes do not invalidate explicit-index reads; queries are bounded.
+event("GUILDBANKFRAME_CLOSED")
+player, currentTab = "Combined-view-selection", 0
+local queries = {}
+function QueryGuildBankTab(tab) queries[tab] = (queries[tab] or 0) + 1 end
+function SetCurrentGuildBankTab() error("collector must not change UI selection") end
+event("GUILDBANKFRAME_OPENED") stepTimers()
+currentTab = 3
+drain()
+assert(#ns.GetStorage("guildBank").entries == 2)
+assert(queries[1] == 1 and queries[2] == 1 and not queries[3])
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+assert(queries[1] == 1 and queries[2] == 1)
+-- Revocation during a yielded scan removes rows before committing.
+event("GUILDBANKBAGSLOTS_CHANGED") stepTimers()
+canView[1] = false
+drain()
+local revoked = ns.GetStorage("guildBank")
+assert(revoked.tabs[1].status == "not_viewable" and #revoked.entries == 1 and revoked.entries[1].tab == 2)
+canView[1] = true
+-- Generic cage links gain pet identity from native tooltip data when available.
+event("GUILDBANKFRAME_CLOSED")
+player = "Guild-pet-tooltip"
+function GetGuildBankItemLink(tab, slot)
+    if slot == 1 then return "|Hitem:82800|h[Pet Cage]|h" end
+end
+C_TooltipInfo = { GetGuildBankItem = function(tab)
+    return { battlePetSpeciesID = 123 + tab, battlePetLevel = 25, battlePetBreedQuality = 3 }
+end }
+C_PetJournal = { GetPetInfoBySpeciesID = function(species) return "Species " .. species end }
+event("GUILDBANKFRAME_OPENED") drain()
+local pet = ns.GetStorage("guildBank").entries[1]
+assert(pet.itemID == 82800 and pet.battlePetSpeciesID == 124 and pet.name == "Species 124")
+assert(pet.battlePetLevel == 25 and pet.battlePetBreedQuality == 3)
+C_TooltipInfo.GetGuildBankItem = function() return { battlePetSpeciesID = 124, battlePetLevel = 0, battlePetBreedQuality = 99 } end
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+pet = ns.GetStorage("guildBank").entries[1]
+assert(pet.battlePetSpeciesID == 124 and not pet.battlePetLevel and not pet.battlePetBreedQuality)
+C_TooltipInfo.GetGuildBankItem = function() error("tooltip unavailable") end
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+assert(not ns.GetStorage("guildBank").entries[1].battlePetSpeciesID)
+C_TooltipInfo, C_PetJournal = nil, nil
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+assert(ns.GetStorage("guildBank").entries[1].itemID == 82800)
+-- All-nil tabs remain explicitly unknown; keep populated older observations.
+now = now + 10
+function GetGuildBankItemInfo() end
+function GetGuildBankItemLink() end
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+local older = ns.GetStorage("guildBank")
+assert(older.tabs[1].status == "cached" and #older.entries == 2 and older.tabs[1].reason)
+event("GUILDBANKFRAME_CLOSED")
+player = "Guild-empty-unknown"
+event("GUILDBANKFRAME_OPENED") drain()
+local empty = ns.GetStorage("guildBank")
+assert(empty.tabs[1].status == "partial" and empty.tabs[1].reason and #empty.entries == 0)
+now = now + 10
+event("GUILDBANKBAGSLOTS_CHANGED") drain()
+assert(ns.GetStorage("guildBank").tabs[1].capturedAt == now, "empty unknown reads must not retain old empty timestamps")
+print("HammerLink combined guild views, bounded queries, permissions, pet tooltips and unknown-empty regressions passed")
+
+-- Late identity must not reset query accounting after queries have been sent.
+event("GUILDBANKFRAME_CLOSED")
+player, guild = "Guild-late-query-identity", nil
+queries = {}
+event("GUILDBANKFRAME_OPENED") stepTimers()
+guild = "Guild A"
+stepTimers()
+event("GUILDBANKBAGSLOTS_CHANGED")
+drain()
+assert(queries[1] == 1 and queries[2] == 1, "late guild identity must query each tab only once")
+-- Item traffic cannot cancel a scan before it commits. Further events coalesce.
+event("GUILDBANKFRAME_CLOSED")
+player = "Guild-busy-bank"
+event("GUILDBANKFRAME_OPENED") stepTimers()
+for batch = 1, 5 do
+    for update = 1, 10 do event("GUILDBANKBAGSLOTS_CHANGED") end
+    stepTimers()
+end
+assert(ns.GetStorage("guildBank").available, "busy guild bank must commit the first scan")
+drain()
+assert(not ns.StorageProgress.guildBank, "coalesced follow-up scan must finish")
+print("HammerLink late-identity query bounds and busy-bank scan completion passed")

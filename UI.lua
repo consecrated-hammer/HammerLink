@@ -6,10 +6,12 @@ local chooserDialog
 
 local function createDialog()
     local f = CreateFrame("Frame", "HammerLinkExportFrame", UIParent, "BackdropTemplate")
-    f:SetSize(760, 360)
+    f:SetSize(520, 310)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
-    f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
+    f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    f:SetBackdropColor(0.077, 0.068, 0.058, 1)
+    f:SetBackdropBorderColor(1, 1, 1, 0.15)
     f:Hide()
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -24,6 +26,7 @@ local function createDialog()
     help:SetPoint("TOPLEFT", 24, -45)
     help:SetPoint("TOPRIGHT", -24, -45)
     help:SetJustifyH("LEFT")
+    help:SetTextColor(1, 1, 1, 0.55)
     help:SetText("Copy this into Consecrated Hammer. It includes the categories chosen in the export chooser. It is local data: nothing is uploaded by the addon.")
 
     local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
@@ -33,6 +36,7 @@ local function createDialog()
     box:SetMultiLine(true)
     box:SetAutoFocus(false)
     box:SetFontObject("ChatFontNormal")
+    box:SetTextColor(1, 1, 1, 0.75)
     box:SetWidth(680)
     -- Multiline EditBoxes grow with their content when used as a ScrollFrame
     -- child. Keep only a viewport-sized initial height so long reports can
@@ -47,13 +51,17 @@ local function createDialog()
     f.help = help
 
     local copyHint = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    copyHint:SetPoint("BOTTOMLEFT", 26, 18)
+    copyHint:SetPoint("BOTTOMLEFT", 24, 16)
+    copyHint:SetPoint("BOTTOMRIGHT", -124, 16)
+    copyHint:SetJustifyH("LEFT")
+    copyHint:SetWordWrap(true)
+    copyHint:SetMaxLines(2)
     copyHint:SetText("Press Ctrl+C to copy")
     f.copyHint = copyHint
 
     local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     close:SetSize(86, 22)
-    close:SetPoint("BOTTOM", 0, 14)
+    close:SetPoint("BOTTOMRIGHT", -24, 14)
     close:SetText("Close")
     close:SetScript("OnClick", function() f:Hide() end)
 
@@ -68,6 +76,7 @@ local function createDialog()
     preview:SetJustifyH("LEFT")
     preview:SetJustifyV("TOP")
     preview:SetWordWrap(true)
+    preview:SetNonSpaceWrap(true)
     preview:SetMaxLines(13)
     local copyScroll = CreateFrame("ScrollFrame", nil, f)
     copyScroll:SetPoint("TOPLEFT", 25, -78)
@@ -81,13 +90,37 @@ local function createDialog()
     copyBox:SetFontObject("ChatFontNormal")
     copyBox:SetTextColor(0, 0, 0, 0)
     copyBox:SetHighlightColor(0, 0, 0, 0)
-    copyBox:SetScript("OnEscapePressed", function() f:Hide() end)
-    copyBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-    copyBox:SetScript("OnTextChanged", function(self, userInput)
-        if userInput then
-            self:SetText(f.output or "")
+    local function selectAll(edit)
+        if f:IsShown() and f.copyTarget == edit then
+            edit:SetFocus()
+            edit:HighlightText()
+        end
+    end
+    for _, edit in ipairs({ box, copyBox }) do
+        edit:SetScript("OnEscapePressed", function() f:Hide() end)
+        edit:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+        edit:SetScript("OnMouseUp", function(self)
+            -- Selection follows the native mouse handler, which otherwise
+            -- replaces the highlight with the clicked cursor position.
+            if C_Timer and C_Timer.After then C_Timer.After(0, function() selectAll(self) end)
+            else selectAll(self) end
+        end)
+        local function restore(self)
+            if f.copyTarget ~= self then return end
+            local original = f.output or ""
+            if self:GetText() ~= original then self:SetText(original) end
             self:HighlightText()
         end
+        edit:SetScript("OnChar", restore)
+        edit:SetScript("OnTextChanged", function(self, userInput)
+            if userInput then restore(self) end
+        end)
+    end
+    f:SetScript("OnHide", function()
+        box:ClearFocus()
+        copyBox:ClearFocus()
+        scroll:SetVerticalScroll(0)
+        copyScroll:SetVerticalScroll(0)
     end)
     f.preview, f.copyBox, f.copyScroll = preview, copyBox, copyScroll
     return f
@@ -107,6 +140,15 @@ end
 
 local function showOutput(output, snapshot, format)
     dialog = dialog or createDialog()
+    local compact = format ~= "ai"
+    dialog:SetSize(compact and 520 or 760, compact and 310 or 360)
+    dialog.box:SetWidth(compact and 440 or 680)
+    dialog.box:SetHeight(compact and 184 or 250)
+    dialog.box:SetFontObject(compact and "GameFontHighlightSmall" or "ChatFontNormal")
+    dialog.box:SetTextColor(1, 1, 1, 0.75)
+    dialog.copyBox:SetWidth(compact and 470 or 700)
+    dialog.copyBox:SetHeight(compact and 184 or 230)
+    dialog.preview:SetFontObject(compact and "GameFontHighlightSmall" or "ChatFontNormal")
     local kilobytes = ns.FormatCount(math.floor(#output / 1024 + 0.5)) .. " KB"
     if format == "ai" then
         dialog.title:SetText("AI-readable HammerLink report")
@@ -114,11 +156,12 @@ local function showOutput(output, snapshot, format)
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete report")
     else
         dialog.title:SetText("Consecrated Hammer export")
-        dialog.help:SetText("Copy this code into Consecrated Hammer. It is local data: nothing is uploaded by the addon.")
+        dialog.help:SetText("Copy the code below into Consecrated Hammer.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete code")
     end
     local large = #output > LARGE_OUTPUT_CHARACTERS
     dialog.output = output
+    dialog.copyTarget = large and dialog.copyBox or dialog.box
     dialog.scroll:SetShown(not large)
     dialog.preview:SetShown(large)
     dialog.copyScroll:SetShown(large)
@@ -126,7 +169,7 @@ local function showOutput(output, snapshot, format)
     if large then
         dialog.box:SetText("")
         dialog.preview:SetText(previewText(output, format))
-        dialog.copyHint:SetText("All " .. kilobytes .. " is selected. Press Ctrl+C to copy it, then paste it in one go")
+        dialog.copyHint:SetText("Preview shown. Ctrl+C copies all " .. kilobytes .. ".")
         dialog.copyBox:SetText(output)
         dialog.copyBox:SetFocus()
         dialog.copyBox:HighlightText()

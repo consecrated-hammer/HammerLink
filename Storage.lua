@@ -24,7 +24,7 @@ local function checkpoint(category)
         coroutine.yield()
     end
 end
-local function startJob(category, collect, guard)
+local function startJob(category, collect, guard, complete)
     local job = { processed = 0 }
     jobs[category] = job
     ns.StorageProgress[category] = { active = true, processed = 0 }
@@ -37,6 +37,7 @@ local function startJob(category, collect, guard)
             cancel(category)
             if not ok and ns.Print then ns.Print("Storage scan stopped: " .. tostring(err)) end
             notify(category, ok)
+            if complete then complete(ok) end
         else
             C_Timer.After(0, resume)
         end
@@ -107,6 +108,21 @@ local function itemRecord(itemID, link, count, quality, name)
     end
     return record
 end
+local function guildPetDetails(item, tab, slot)
+    if item.itemID ~= 82800 and not item.battlePetSpeciesID then return end
+    local ok, tooltip = call(C_TooltipInfo and C_TooltipInfo.GetGuildBankItem, tab, slot)
+    if not ok or type(tooltip) ~= "table" then return end
+    local species = tooltip.battlePetSpeciesID
+    if type(species) ~= "number" or species <= 0 or species > 9007199254740991 or species % 1 ~= 0 then return end
+    item.battlePetSpeciesID = species
+    local nameOK, name = call(C_PetJournal and C_PetJournal.GetPetInfoBySpeciesID, species)
+    if nameOK and type(name) == "string" and name ~= "" and #name <= 512 then item.name = name end
+    for _, key in ipairs({ "battlePetLevel", "battlePetBreedQuality" }) do
+        local value = tooltip[key]
+        local minimum, maximum = key == "battlePetLevel" and 1 or 0, key == "battlePetLevel" and 255 or 8
+        if type(value) == "number" and value >= minimum and value <= maximum and value % 1 == 0 then item[key] = value end
+    end
+end
 local function scanContainer(result, bag, name)
     local tab = { id = bag, name = name, status = "unavailable" }
     result.tabs[#result.tabs + 1] = tab
@@ -137,15 +153,21 @@ local function scanContainer(result, bag, name)
         end
     end
 end
-local function retainCachedTabs(result, previous, locationKey)
+local function retainCachedTabs(result, previous, locationKey, keepEmpty)
     if not previous then return end
     local oldTabs = {}
     for _, tab in ipairs(previous.tabs or {}) do oldTabs[tab.id] = tab end
+    local populated = {}
+    for _, item in ipairs(previous.entries or {}) do
+        if item[locationKey] ~= nil then populated[item[locationKey]] = true end
+    end
     for index, tab in ipairs(result.tabs) do
         local old = oldTabs[tab.id]
-        if old and old.capturedAt and (tab.status == "unavailable" or tab.status == "unobserved" or tab.status == "partial") then
+        if old and old.capturedAt and (keepEmpty ~= false or populated[tab.id])
+            and (tab.status == "unavailable" or tab.status == "unobserved" or tab.status == "partial") then
             local replacement = clone(old)
             replacement.status = "cached"
+            if keepEmpty == false then replacement.reason = "Latest read incomplete; retained the earlier observation." end
             result.tabs[index], result.partial = replacement, true
             local kept = {}
             for _, item in ipairs(result.entries) do
@@ -206,40 +228,50 @@ end
 
 local guildTabs = {}
 local guildSessionKey
+local guildVisit = 0
+local guildPending
+local guildReadingKey
+local guildQueriedTabs = {}
+local guildDirty = false
 local function captureGuild(captureCurrent)
     if not open.guild then return end
     local guildKey, guildName = guildIdentity()
     local store = cache(true)
     if not store or not guildKey then return end
-    if guildSessionKey ~= guildKey then guildTabs = {} guildSessionKey = guildKey end
+    if guildSessionKey ~= guildKey then guildTabs = {} guildQueriedTabs = {} guildSessionKey = guildKey end
     local previous = store.guildBank
     if not previous or previous.guildKey ~= guildKey then previous = nil end
     local ok, total = call(GetNumGuildBankTabs)
     if not ok or type(total) ~= "number" or total < 1 or total > 20 then return end
     if not captureCurrent then
         if not previous then return end
-        local result = clone(previous)
         local allowed, changed = {}, false
-        for _, tab in ipairs(result.tabs) do
+        for _, tab in ipairs(previous.tabs) do
             local readOK, _, _, viewable = call(GetGuildBankTabInfo, tab.id)
             allowed[tab.id] = readOK and viewable == true
             if not allowed[tab.id] then
-                tab.status, tab.capturedAt, result.partial = "not_viewable", nil, true
-                guildTabs[tab.id], changed = nil, true
+                if tab.status ~= "not_viewable" then changed = true end
+                guildTabs[tab.id], guildQueriedTabs[tab.id] = nil, nil
             end
         end
         if changed then
+            local result = clone(previous)
+            result.partial = true
+            for _, tab in ipairs(result.tabs) do
+                if not allowed[tab.id] then
+                    tab.status, tab.capturedAt, tab.reason = "not_viewable", nil, nil
+                end
+            end
             result.entries = {}
             for _, item in ipairs(previous.entries) do
                 if allowed[item.tab] then result.entries[#result.entries + 1] = clone(item) end
             end
             store.guildBank = result
         end
-        return
+        return changed
     end
     local result = observation("guildBank")
     result.guildKey, result.guildName = guildKey, guildName
-    local _, current = call(GetCurrentGuildBankTab)
     for tabID = 1, total do
         local infoOK, name, _, canView = call(GetGuildBankTabInfo, tabID)
         local tab = { id = tabID, name = type(name) == "string" and name or nil, status = "unobserved" }
@@ -247,7 +279,7 @@ local function captureGuild(captureCurrent)
         if not infoOK or canView ~= true then
             tab.status = "not_viewable"
             guildTabs[tabID] = nil
-        elseif captureCurrent and tabID == current then
+        else
             local saved = { entries = {}, capturedAt = time(), partial = false }
             for slot = 1, 98 do
                 checkpoint("guildBank")
@@ -257,6 +289,7 @@ local function captureGuild(captureCurrent)
                 elseif texture or link then
                     local item = itemRecord(nil, link, count, quality)
                     if item then
+                        guildPetDetails(item, tabID, slot)
                         item.tab, item.slot = tabID, slot
                         saved.entries[#saved.entries + 1] = item
                     else saved.partial = true end
@@ -264,7 +297,12 @@ local function captureGuild(captureCurrent)
             end
             -- The event has no tab ID or explicit loaded acknowledgement.
             -- An all-nil read is unknown, never proof of an empty guild tab.
-            if #saved.entries == 0 then saved.partial = true end
+            if #saved.entries == 0 then
+                saved.partial = true
+                tab.reason = "No item stacks exposed; this may be empty or still loading."
+            elseif saved.partial then
+                tab.reason = "Some slot data could not be read."
+            end
             guildTabs[tabID] = saved
         end
         -- Carry forward only this session's observed tabs. Reopening the bank
@@ -277,9 +315,116 @@ local function captureGuild(captureCurrent)
             if saved.partial then result.partial = true end
         else result.partial = true end
     end
-    retainCachedTabs(result, previous, "tab")
+    -- Selection is a UI concern: explicit tab-index reads also work with
+    -- combined bank views. Recheck permissions after yielding, before any
+    -- current or retained rows are committed.
+    local allowed = {}
+    for _, tab in ipairs(result.tabs) do
+        local ok, _, _, canView = call(GetGuildBankTabInfo, tab.id)
+        allowed[tab.id] = ok and canView == true
+        if not allowed[tab.id] then
+            tab.status, tab.capturedAt, tab.reason = "not_viewable", nil, nil
+            result.partial = true
+            guildTabs[tab.id], guildQueriedTabs[tab.id] = nil, nil
+        end
+    end
+    local visible = {}
+    for _, item in ipairs(result.entries) do if allowed[item.tab] then visible[#visible + 1] = item end end
+    result.entries = visible
+    retainCachedTabs(result, previous, "tab", false)
     store.guildBank = result
 end
+
+local queueGuild
+queueGuild = function()
+    if not open.guild then return end
+    if jobs.guildBank then guildDirty = true return end
+    cancel("guildBank")
+    guildReadingKey = nil
+    ns.StorageProgress.guildBank = { active = true, processed = 0, queued = true }
+    notify()
+    if guildPending then return end
+    local request = { visit = guildVisit, owner = identity(), attempts = 0 }
+    guildPending = request
+    local function run()
+        if guildPending ~= request then return end
+        if not open.guild or guildVisit ~= request.visit or identity() ~= request.owner then
+            guildPending = nil
+            cancel("guildBank") notify()
+            return
+        end
+        request.attempts = request.attempts + 1
+        local guildKey = guildIdentity()
+        local totalOK, total = call(GetNumGuildBankTabs)
+        local ready = guildKey and totalOK and type(total) == "number" and total >= 1 and total <= 20
+        if ready then
+            if guildSessionKey ~= guildKey then
+                guildTabs, guildQueriedTabs, guildSessionKey = {}, {}, guildKey
+            end
+            ready = false
+            for tab = 1, total do
+                local infoOK, _, _, canView = call(GetGuildBankTabInfo, tab)
+                if infoOK and canView == true then
+                    ready = true
+                    if not guildQueriedTabs[tab] then
+                        guildQueriedTabs[tab] = true
+                        call(QueryGuildBankTab, tab)
+                    end
+                end
+            end
+        end
+        if not ready then
+            -- The interaction opens before guild identity, tab metadata and
+            -- permissions are necessarily ready. Retry without relying on a
+            -- subsequent item-change event, and never wait indefinitely.
+            if request.attempts < 8 and C_Timer and C_Timer.After then
+                C_Timer.After(0.25, run)
+            else
+                guildPending = nil
+                cancel("guildBank") notify()
+            end
+            return
+        end
+        guildPending = nil
+        guildReadingKey = guildKey
+        guildDirty = false
+        startJob("guildBank", function() captureGuild(true) end, function()
+            return open.guild and guildVisit == request.visit and identity() == request.owner
+                and guildIdentity() == guildKey
+        end, function(ok)
+            if ok and guildDirty and open.guild and guildVisit == request.visit then
+                guildDirty = false
+                queueGuild()
+            end
+        end)
+    end
+    -- Give initial metadata and cached contents a frame to become available.
+    -- Explicit tab reads do not depend on the bank UI's current selection.
+    if C_Timer and C_Timer.After then C_Timer.After(0.1, run) else run() end
+end
+
+local function openGuild()
+    if not open.guild then
+        open.guild = true
+        guildVisit = guildVisit + 1
+        guildTabs = {}
+        guildQueriedTabs = {}
+        guildSessionKey = guildIdentity()
+    end
+    queueGuild()
+end
+
+local function closeGuild()
+    open.guild = false
+    guildDirty = false
+    guildVisit = guildVisit + 1
+    guildPending = nil
+    guildReadingKey = nil
+    guildTabs = {}
+    guildQueriedTabs = {}
+    cancel("guildBank") notify()
+end
+
 local function captureVoid()
     if not open.void or type(GetVoidItemInfo) ~= "function" then return end
     local result = observation("voidStorage")
@@ -335,7 +480,7 @@ function ns.GetStorage(category)
     end
     if value then return clone(value) end
     return unavailable(category, category == "voidStorage" and "Open void storage to capture its contents, if this client supports it."
-        or category == "guildBank" and "Open the guild bank and visit each viewable tab, then reopen the export chooser."
+        or category == "guildBank" and "Open the guild bank and wait for its contents to load, then reopen the export chooser."
         or "Open the bank and wait for its contents to load, then reopen the export chooser.")
 end
 
@@ -344,23 +489,38 @@ local frame = CreateFrame("Frame")
 for _, event in ipairs({ "BANKFRAME_OPENED", "BANKFRAME_CLOSED", "PLAYERBANKSLOTS_CHANGED",
     "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", "BANK_TABS_CHANGED", "BAG_CONTAINER_UPDATE",
     "GUILDBANKFRAME_OPENED", "GUILDBANKFRAME_CLOSED", "GUILDBANKBAGSLOTS_CHANGED", "GUILDBANK_UPDATE_TABS",
+    "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "PLAYER_INTERACTION_MANAGER_FRAME_HIDE", "GUILD_ROSTER_UPDATE",
     "VOID_STORAGE_OPEN", "VOID_STORAGE_CLOSE", "VOID_STORAGE_UPDATE", "VOID_STORAGE_CONTENTS_UPDATE" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
 frame:SetScript("OnEvent", function(_, event, bagID)
     if event == "BANKFRAME_OPENED" then open.bank = true queueBanks()
     elseif event == "BANKFRAME_CLOSED" then open.bank = false cancel("bank") cancel("warbandBank") notify()
-    elseif event == "GUILDBANKFRAME_OPENED" then open.guild = true guildTabs = {} guildSessionKey = guildIdentity()
-    elseif event == "GUILDBANKFRAME_CLOSED" then open.guild = false guildTabs = {} cancel("guildBank") notify()
-    elseif event == "GUILDBANKBAGSLOTS_CHANGED" then
-        local key, guildKey = identity(), guildIdentity()
-        local _, tab = call(GetCurrentGuildBankTab)
-        startJob("guildBank", function() captureGuild(true) end, function()
-            local _, current = call(GetCurrentGuildBankTab)
-            local ok, _, _, canView = call(GetGuildBankTabInfo, tab)
-            return open.guild and identity() == key and guildIdentity() == guildKey and current == tab and ok and canView == true
-        end)
-    elseif event == "GUILDBANK_UPDATE_TABS" then captureGuild(false) notify("guildBank", true)
+    elseif event == "GUILDBANKFRAME_OPENED" then openGuild()
+    elseif event == "GUILDBANKFRAME_CLOSED" then closeGuild()
+    elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" or event == "PLAYER_INTERACTION_MANAGER_FRAME_HIDE" then
+        local guildBanker = Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.GuildBanker
+        if guildBanker ~= nil and bagID == guildBanker then
+            if event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then openGuild() else closeGuild() end
+        end
+    elseif event == "GUILDBANKBAGSLOTS_CHANGED" then queueGuild()
+    elseif event == "GUILDBANK_UPDATE_TABS" or event == "GUILD_ROSTER_UPDATE" then
+        if open.guild then
+            if captureGuild(false) then notify("guildBank", true) end
+            local key = guildIdentity()
+            -- Metadata can unblock the initial read, but unrelated roster
+            -- traffic must not restart a current scan or recapture known tabs.
+            local readingGuild = jobs.guildBank and guildReadingKey == key
+            if not guildPending and not readingGuild then
+                local totalOK, total = call(GetNumGuildBankTabs)
+                if totalOK and type(total) == "number" and total >= 1 and total <= 20 then
+                    for tab = 1, total do
+                        local ok, _, _, canView = call(GetGuildBankTabInfo, tab)
+                        if ok and canView == true and not guildTabs[tab] then queueGuild() break end
+                    end
+                end
+            end
+        end
     elseif event == "VOID_STORAGE_OPEN" then open.void = true
     elseif event == "VOID_STORAGE_CLOSE" then open.void = false cancel("voidStorage") notify()
     elseif event == "VOID_STORAGE_UPDATE" or event == "VOID_STORAGE_CONTENTS_UPDATE" then

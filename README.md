@@ -23,6 +23,11 @@ HammerLink exports your character's live data from the game, either as a readabl
 
 Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon to open settings. Every category is optional. Pick a format, tick the categories you want, and copy the result.
 
+The compact-code copy window selects the full export automatically. Click the
+text to select it again, then press Ctrl+C. The field is read-only so an
+accidental keypress can't change the code. Large exports show a labelled
+preview while Ctrl+C still copies the complete export.
+
 ## Commands
 
 | Command | What it does |
@@ -41,7 +46,7 @@ Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `st
 | Bag items | Every occupied backpack, bag and reagent bag slot, with stack size, quality, binding, item level, gems and stats where available |
 | Character bank | Saved bank contents, including bank bags or tabs and legacy reagent storage where supported |
 | Warband Bank | Saved account-bank contents, labelled as shared account storage |
-| Guild bank | Saved contents of visited, viewable tabs, labelled as shared guild storage |
+| Guild bank | Saved contents of viewable tabs, labelled as shared guild storage |
 | Void storage | Saved contents on clients that still provide it |
 | Current spellbook | Spell IDs, skill lines, passive and off-spec flags, and flyouts |
 | Active talents | The talent import string |
@@ -59,7 +64,8 @@ On WoW Forever, the Great Vault, Housing decor and currency categories aren't of
 ## Stored items
 
 Open your bank, let its contents load, then reopen `/hl export`. For the guild
-bank, visit each tab you can view. HammerLink saves those observations per
+bank, allow the viewable tabs to load, including when using a combined view.
+HammerLink saves those observations per
 character and keeps Retail and Forever separate. Each storage category starts
 enabled and can be unticked in the chooser. Both output formats retain item
 IDs, quantities, locations, available names and links, capture times and

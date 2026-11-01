@@ -1,7 +1,8 @@
 # Storage observations
 
-Storage export is included from HammerLink 0.12.0. In-game collection has
-not yet been checked on Retail or Forever. This contract is owned by
+Storage export is included from HammerLink 0.12.0. Real Retail exports have
+passed site import and report comparison. The combined-view follow-up and
+Forever collection still need in-game checks. This contract is owned by
 `Storage.lua`, with selection and report integration in `Export.lua` and `UI.lua`.
 
 ## Client API evidence
@@ -16,6 +17,9 @@ Checked against the Blizzard UI source mirrors on 2026-11-01:
   container slot reads. Its bank bags and pagination differ from Retail.
   HammerLink uses every returned `BankTabData.ID` and actual container capacity;
   it doesn't assume six character tabs or a fixed tab size.
+- [Guild bank interaction bootstrap](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_GuildBankUI/Blizzard_GuildBankUI_Bootstrap.lua)
+  registers Retail’s GuildBanker interaction. The collector supports this
+  opening path as well as the legacy open/close events.
 - [Guild bank UI](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_GuildBankUI/Mainline/Blizzard_GuildBankUI.lua)
   reads view permissions and 98 item slots per tab after bank item updates.
 - [Blizzard's character bank update](https://us.forums.blizzard.com/en/wow/t/player-character-bank-updates/2132208)
@@ -55,8 +59,9 @@ exports retain the same object and category selection excludes it completely.
 Bank opens and bank/container updates trigger a debounced read while the bank
 is open. Collection yields every 40 slots; the chooser shows slot progress and
 blocks generation while a selected storage category is queued or being read. Completed
-observations replace cached tables atomically. Closing a bank or changing guild
-tabs cancels the relevant unfinished job. Existing export compression yields
+observations replace cached tables atomically. Closing a bank cancels the
+relevant unfinished job. Guild UI selection changes do not cancel explicit
+tab-index reads. Existing export compression yields
 across frames too; storage rows are never silently discarded to fit the size
 limit. Both bank types require `C_Bank.CanUseBank` before collection.
 Unknown, locked or loading banks cannot create a complete empty observation.
@@ -67,14 +72,27 @@ The original bank API fallback covers its main container, purchased bank bags
 and an unlocked reagent bank where those APIs exist. Neither supported current
 client is forced down that fallback just because it isn't Retail.
 
-Guild bank opens alone don't establish loaded item data. Item-update events
-capture the current viewable tab; unvisited tabs stay unknown. This session's
-visited tabs are combined with their individual capture times. Reopening starts
-a new view. Older tab observations are retained only when still viewable,
-marked `cached` with their original time, and make the combined result partial.
-A tab whose slot reads all return nil remains partial because the event has no
-explicit loaded acknowledgement. Metadata-only updates do not erase a useful
-previous observation. Permission updates remove no-longer-viewable tab contents. Guild identity is
+Guild visits are detected through both interaction-manager GuildBanker events
+and legacy guild-bank open/close events. Opening schedules a deferred read of
+all viewable tabs by explicit index, including cached contents without a new
+item event. Each viewable tab is queried once per visit without changing UI
+selection. This supports combined views such as Baganator's Everything tab.
+Unready guild identity, tab counts and permissions get at most eight attempts
+250 ms apart; later metadata or item updates can start another attempt. Close
+events cancel queued retries and unfinished reads. Item updates refresh all
+viewable tabs; the collector yields every 40 slots. Item events during a scan
+coalesce into one follow-up after the current observation commits, so traffic
+cannot repeatedly cancel a read. Permissions are checked
+again after yielding before any rows are committed.
+
+A tab whose slot reads all return nil stays partial with an explicit empty-or-
+loading reason. Older populated observations are retained only while viewable,
+marked cached with their original times. Empty prior reads are not retained as
+useful observations. Metadata-only updates do not refresh item timestamps.
+Permission updates remove no-longer-viewable contents. Generic pet cages gain
+species ID, species name, level and breed quality when native tooltip and pet
+journal APIs expose them; absent APIs leave the generic cage intact. There is
+no Baganator or Syndicator dependency. Guild identity is
 checked again when exporting, so leaving or changing guild cannot export the
 previous guild's snapshot. Viewing an item does not establish withdrawal rights.
 
@@ -105,8 +123,9 @@ Required in-game checks on both clients:
    quantities and locations against character and account banks.
 3. Change an item stack and verify a new export refreshes it. Close the bank
    and confirm later exports keep the observation time.
-4. Visit each viewable guild tab and check unvisited/forbidden tabs stay
-   explicit. Confirm shared scope and per-tab times in both export formats.
+4. Open the guild bank, including a combined view, and check readable tabs are
+   captured while loading/forbidden tabs stay explicit. Confirm shared scope and
+   per-tab times in both export formats.
 5. Reload and switch characters to check persistence and isolation. Confirm
    unsupported void storage is absent from the chooser.
 

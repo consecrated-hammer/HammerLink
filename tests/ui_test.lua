@@ -32,6 +32,7 @@ local function widget(kind, name, template)
     function value:SetFrameStrata() end
     function value:SetBackdrop() end
     function value:SetBackdropColor() end
+    function value:SetBackdropBorderColor() end
     function value:SetMovable() end
     function value:Enable() self.enabled = true end
     function value:Disable() self.enabled = false end
@@ -39,20 +40,22 @@ local function widget(kind, name, template)
     function value:EnableKeyboard() end
     function value:RegisterForDrag() end
     function value:SetPropagateKeyboardInput() end
-    function value:SetMultiLine() end
+    function value:SetMultiLine(enabled) self.multiline = enabled end
     function value:SetAutoFocus() end
-    function value:SetFontObject() end
+    function value:SetFontObject(font) self.fontObject = font end
     function value:SetAlpha(alpha) self.alpha = alpha end
     function value:SetTextInsets() end
     function value:SetTextColor() end
     function value:SetHighlightColor() end
-    function value:SetWordWrap() end
+    function value:SetWordWrap(enabled) self.wordWrap = enabled end
+    function value:SetNonSpaceWrap(enabled) self.nonSpaceWrap = enabled end
     function value:SetMaxLines() end
     function value:SetJustifyH(justification) self.justifyH = justification end
     function value:SetJustifyV(justification) self.justifyV = justification end
     function value:SetScrollChild(child) self.scrollChild = child end
     function value:SetVerticalScroll(position) self.scrollPosition = position end
     function value:SetFocus() self.focused = true end
+    function value:ClearFocus() self.focused = false end
     function value:HighlightText() self.highlightedText = true end
     function value:SetText(text) self.text = text end
     function value:SetTexture(texture) self.texture = texture end
@@ -417,3 +420,91 @@ namespace.StorageProgress = {}
 namespace.StorageChanged()
 assert(not chooser.storageLoading and generate.enabled, "finishing storage re-enables generation")
 print("HammerLink storage progress UI tests passed")
+
+-- A guild capture finishing while the chooser is open must replace its
+-- unavailable snapshot, rather than requiring another chooser open.
+local previousCategoryInfo = namespace.GetExportCategoryInfo
+namespace.GetExportCategoryInfo = function(snapshot, category, ...)
+    if category ~= "guildBank" then return previousCategoryInfo(snapshot, category, ...) end
+    local section = snapshot.guildBank
+    return { count = section and #(section.entries or {}) or 0, characters = 100,
+        unavailable = not section or section.available == false }
+end
+chooser.snapshot.guildBank = { available = false, entries = {} }
+namespace.StorageProgress.guildBank = { active = true, processed = 0, queued = true }
+namespace.StorageChanged()
+assert(not generate.enabled and chooser.rows.guildBank.count.text:find("Reading", 1, true))
+namespace.GetStorage = function(category)
+    assert(category == "guildBank")
+    return { available = true, entries = { { itemID = 300, tab = 1, slot = 1, stackCount = 8 } } }
+end
+namespace.StorageProgress.guildBank = nil
+namespace.StorageChanged("guildBank", true)
+assert(chooser.snapshot.guildBank.available and generate.enabled)
+assert(chooser.rows.guildBank.count.text:find("1 record", 1, true), "guild completion must replace Unavailable in the open chooser")
+namespace.GetExportCategoryInfo = previousCategoryInfo
+print("HammerLink open-chooser guild capture regression passed")
+
+-- Ellesmere-style copy interaction: a smaller code popup, full selection,
+-- read-only contents, deferred click selection and no focus stolen after close.
+namespace.ShowExport()
+compactOption.func()
+generate.scripts.OnClick()
+pendingExport()
+assert(output.width == 520 and output.height == 310, "compact codes use the smaller popup")
+assert(output.box.multiline and output.box.fontObject == "GameFontHighlightSmall")
+assert(output.box.text == "HL1:test" and output.copyTarget == output.box)
+output.box:SetText("accidental edit")
+output.box.scripts.OnTextChanged(output.box, true)
+assert(output.box.text == "HL1:test" and output.box.highlightedText, "editing must restore the original complete code")
+output.box:SetText("typed")
+output.box.scripts.OnChar(output.box, "x")
+assert(output.box.text == "HL1:test")
+output.box.highlightedText = false
+output.box.scripts.OnEditFocusGained(output.box)
+assert(output.box.highlightedText, "focus must select the whole export")
+local oldTimer, deferred = C_Timer, {}
+C_Timer = { After = function(_, callback) deferred[#deferred + 1] = callback end }
+output.box.highlightedText = false
+output.box.scripts.OnMouseUp(output.box)
+assert(not output.box.highlightedText, "click selection must follow the native mouse handler")
+table.remove(deferred, 1)()
+assert(output.box.highlightedText and output.box.focused)
+output.box.scripts.OnMouseUp(output.box)
+output:Hide()
+table.remove(deferred, 1)()
+assert(not output.box.focused and not output.copyBox.focused, "a stale click must not steal focus after closing")
+C_Timer = oldTimer
+local normalCompact = namespace.BuildExport
+namespace.BuildExport = function() return "HL1:" .. string.rep("a", 150000) end
+namespace.ShowExport()
+generate.scripts.OnClick()
+pendingExport()
+assert(output.width == 520 and output.height == 310 and output.copyTarget == output.copyBox)
+assert(#output.copyBox.text == 150004 and output.copyBox.highlightedText, "large codes retain every byte in the copy target")
+assert(output.preview.nonSpaceWrap and #output.preview.text < 1000, "unbroken code previews wrap without drawing the full payload")
+assert(output.copyHint.text:find("Preview shown", 1, true), "the preview must not be mistaken for the copied payload")
+local fullLargeCode = output.copyBox.text
+local setCopyText, restoreCalls = output.copyBox.SetText, 0
+output.copyBox.SetText = function(self, text) restoreCalls = restoreCalls + 1 setCopyText(self, text) end
+setCopyText(output.copyBox, "accidental edit")
+output.copyBox.scripts.OnChar(output.copyBox, "x")
+output.copyBox.scripts.OnTextChanged(output.copyBox, true)
+assert(output.copyBox.text == fullLargeCode and restoreCalls == 1, "large text must be restored once when both edit callbacks fire")
+output.copyBox.SetText = setCopyText
+output.copyBox.highlightedText = false
+output.copyBox.scripts.OnMouseUp(output.copyBox)
+assert(output.copyBox.highlightedText and output.copyBox.text == fullLargeCode)
+namespace.BuildExport = normalCompact
+namespace.ShowExport()
+aiOption.func()
+generate.scripts.OnClick()
+assert(output.width == 760 and output.height == 360 and output.box.height == 250, "Markdown keeps the readable report layout")
+local fullMarkdown = output.box.text
+output.box:SetText("accidental report edit")
+output.box.scripts.OnTextChanged(output.box, true)
+assert(output.box.text == fullMarkdown)
+output.box.highlightedText = false
+output.box.scripts.OnMouseUp(output.box)
+assert(output.box.highlightedText and output.box.text == fullMarkdown)
+print("HammerLink compact copy-popup interaction and complete-payload tests passed")

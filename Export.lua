@@ -821,6 +821,9 @@ local function itemLine(item, location)
     addValue(parts, "item level", item.itemLevel or item.baseItemLevel)
     addValue(parts, "quantity", item.stackCount and item.stackCount > 1 and item.stackCount or nil, true)
     addValue(parts, "quality", item.quality)
+    addValue(parts, "pet species ID", item.battlePetSpeciesID)
+    addValue(parts, "pet level", item.battlePetLevel)
+    addValue(parts, "pet quality", item.battlePetBreedQuality)
     addValue(parts, "type", item.itemSubType or item.itemType)
     if item.isBound ~= nil then addValue(parts, "bound", item.isBound and "yes" or "no") end
     addValue(parts, "item string", itemString(item.link))
@@ -945,7 +948,8 @@ function buildSection(snapshot, category)
         if storage.partial then append(lines, "- **Partial:** some tabs or slots are unobserved or unavailable.") end
         for _, tab in ipairs(storage.tabs or {}) do
             append(lines, "- Tab " .. tostring(tab.id) .. ": " .. plain(tab.name or "") .. "; " .. plain(tab.status)
-                .. (tab.capturedAt and ("; observed " .. capturedTime(tab.capturedAt)) or ""))
+                .. (tab.capturedAt and ("; observed " .. capturedTime(tab.capturedAt)) or "")
+                .. (tab.reason and ("; " .. plain(tab.reason)) or ""))
         end
         for _, item in ipairs(storage.entries or {}) do
             append(lines, itemLine(item, "Tab/bag " .. tostring(item.tab or item.bag or "?") .. ", slot " .. tostring(item.slot or "?")))

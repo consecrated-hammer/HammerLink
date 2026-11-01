@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.12.1] - 2026-11-01
+
+### Fixed
+
+- Capture guild-bank visits through Retail's interaction manager and legacy
+  events. Retry briefly while metadata loads and update the open export chooser
+  when collection finishes.
+- Read every viewable guild-bank tab by index, including Baganator's combined
+  view, without changing selection. Item updates during a scan trigger a
+  follow-up after it commits, so busy banks can finish collecting.
+- Explain empty/loading reads and retain older populated observations only
+  while still viewable, with their original timestamps and a cached warning.
+- Use a smaller export-code popup with automatic full selection, click-to-select
+  and read-only text. Large-code previews wrap and identify the full copied
+  payload. Readable reports keep their larger layout.
+
+### Changed
+
+- Include pet species, level and quality when native guild-slot tooltips expose
+  them. Some Retail captures still return generic Pet Cage records without
+  species details.
+
 ## [0.12.0] - 2026-11-01
 
 ### Added

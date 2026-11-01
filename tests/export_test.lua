@@ -581,10 +581,19 @@ namespace.GetStorage = function(category)
 end
 local withStorage = namespace.BuildSnapshot({ bank = true, warbandBank = true, guildBank = true })
 assert(withStorage.bank.entries[1].stackCount == 17)
+withStorage.guildBank.entries[1].battlePetSpeciesID = 124
+withStorage.guildBank.entries[1].battlePetLevel = 25
+withStorage.guildBank.entries[1].battlePetBreedQuality = 3
+withStorage.guildBank.tabs[1].reason = "Synthetic partial reason"
 local storageReport = namespace.BuildAIReport(withStorage)
 assert(storageReport:find("## Character bank", 1, true) and storageReport:find("## Warband Bank", 1, true))
 assert(storageReport:find("Saved cloth", 1, true) and storageReport:find("quantity 17", 1, true))
 assert(storageReport:find("Saved observations", 1, true) and storageReport:find("**Partial:**", 1, true))
+local petReport = namespace.BuildAIReport(withStorage)
+assert(petReport:find("species ID 124", 1, true) and petReport:find("Synthetic partial reason", 1, true))
+local petCode = namespace.BuildExport(namespace.SelectSnapshot(withStorage, { guildBank = true, bank = false, warbandBank = false, voidStorage = false }))
+local petJSON = lib:DecompressDeflate(lib:DecodeForPrint(petCode:sub(5)))
+assert(petJSON:find('"battlePetSpeciesID":124', 1, true) and petJSON:find('"battlePetLevel":25', 1, true))
 local kept = namespace.SelectSnapshot(withStorage, { bank = true, warbandBank = false, guildBank = false, voidStorage = false })
 assert(kept.bank == withStorage.bank and not kept.warbandBank and not kept.guildBank)
 local storageCode = namespace.BuildExport(kept)
@@ -595,5 +604,10 @@ local fixturePath = os.getenv("HAMMERLINK_STORAGE_FIXTURE")
 if fixturePath then
     local file = assert(io.open(fixturePath, "w"))
     file:write(storageCode) file:close()
+end
+local petFixturePath = os.getenv("HAMMERLINK_PET_FIXTURE")
+if petFixturePath then
+    local file = assert(io.open(petFixturePath, "w"))
+    file:write(petCode) file:close()
 end
 print("HammerLink storage export integration tests passed")
