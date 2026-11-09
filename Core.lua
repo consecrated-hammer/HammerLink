@@ -2,11 +2,13 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.12.1"
+ns.VERSION = "0.13.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
 local DEFAULT_EXPORT_FORMAT = "ai"
+-- How solid the export windows' backing is. Text and controls stay opaque.
+local DEFAULT_WINDOW_OPACITY, MIN_WINDOW_OPACITY, MAX_WINDOW_OPACITY = 1, 0.5, 1
 
 local DEFAULT_OPTIONS = {
     equipment = true,
@@ -71,6 +73,26 @@ end
 function ns.SetExportFormat(format)
     if not ns.db or (format ~= "compact" and format ~= "ai") then return false end
     ns.db.exportFormat = format
+    return true
+end
+
+-- Snaps to 5% steps inside the allowed range; nil for anything unreadable.
+local function windowOpacity(value)
+    value = tonumber(value)
+    if not value or value ~= value then return nil end
+    value = math.floor(value * 20 + 0.5) / 20
+    return math.max(MIN_WINDOW_OPACITY, math.min(MAX_WINDOW_OPACITY, value))
+end
+
+function ns.GetWindowOpacity()
+    return windowOpacity(ns.db and ns.db.windowOpacity) or DEFAULT_WINDOW_OPACITY
+end
+
+function ns.SetWindowOpacity(value)
+    value = windowOpacity(value)
+    if not ns.db or not value then return false end
+    ns.db.windowOpacity = value
+    if ns.ApplyWindowOpacity then ns.ApplyWindowOpacity() end
     return true
 end
 
@@ -363,6 +385,7 @@ frame:SetScript("OnEvent", function(_, event, loadedName)
         for category, enabled in pairs(DEFAULT_OPTIONS) do
             if ns.db.options[category] == nil then ns.db.options[category] = enabled end
         end
+        ns.db.windowOpacity = windowOpacity(ns.db.windowOpacity) or DEFAULT_WINDOW_OPACITY
         ns.HammerCore:Start()
     elseif event == "PLAYER_LOGIN" then
         if ns.IsExportSupported("decorInventory") then ns.RefreshDecorInventory() end

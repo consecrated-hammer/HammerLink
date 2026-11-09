@@ -1,42 +1,157 @@
 local addonName, ns = ...
+local HC = ns.HammerCore
+local UI, T = HC.UI, HC.Theme
 
 local dialog
 local chooserDialog
 
+-- HammerLink's three windows share HammerCore's settings look: an edged
+-- surface, a header bar with the title and a close button, drag by the bar.
+local HEADER, PAD = 40, 16
+
+-- Every window, for re-applying the opacity setting live.
+local windows = {}
+
+-- The theme's "outer" colour is slightly see-through, so the backdrop keeps
+-- only its edge and a separate body texture carries the fill. Its alpha is
+-- the player's Window opacity; text and controls are never faded.
+local function applyOpacity(win)
+    local opacity = ns.GetWindowOpacity and ns.GetWindowOpacity() or 1
+    local r, g, b = T.Unpack("content")
+    win.hcBody:SetColorTexture(r, g, b, opacity)
+    local br, bg, bb = T.Unpack("outer")
+    if win.SetBackdropColor then win:SetBackdropColor(br, bg, bb, 0) end
+end
+
+function ns.ApplyWindowOpacity()
+    for _, win in ipairs(windows) do applyOpacity(win) end
+end
+
+local function createWindow(name, parent, width, height, titleText, strata)
+    local win = CreateFrame("Frame", name, parent or UIParent, "BackdropTemplate")
+    win:SetSize(width, height)
+    win:SetPoint("CENTER")
+    win:SetFrameStrata(strata or "DIALOG")
+    win:SetToplevel(true)
+    win:SetClampedToScreen(true)
+    win:SetMovable(true)
+    win:EnableMouse(true)
+    T.Surface(win, "outer", "edge")
+    local framed = T.Active().surfaces and T.Active().surfaces.outer
+    local inset = framed and framed.inset or 1
+    local body = win:CreateTexture(nil, "BACKGROUND")
+    body:SetPoint("TOPLEFT", inset, -inset)
+    body:SetPoint("BOTTOMRIGHT", -inset, inset)
+    win.hcBody = body
+    windows[#windows + 1] = win
+    applyOpacity(win)
+    win:Hide()
+
+    local bar = CreateFrame("Frame", nil, win)
+    bar:SetPoint("TOPLEFT", inset, -inset)
+    bar:SetPoint("TOPRIGHT", -inset, -inset)
+    bar:SetHeight(HEADER)
+    T.Fill(bar:CreateTexture(nil, "BACKGROUND"), "header"):SetAllPoints()
+    bar:EnableMouse(true)
+    bar:RegisterForDrag("LeftButton")
+    bar:SetScript("OnDragStart", function() win:StartMoving() end)
+    bar:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
+    local title = T.Font(UI.FontString(bar, "GameFontNormalLarge", "text"), 16)
+    title:SetPoint("LEFT", PAD, 0)
+    title:SetText(titleText)
+    local close = UI.CloseButton(bar, function() win:Hide() end, 24)
+    close:SetPoint("RIGHT", -8, 0)
+    win.bar, win.title, win.closeButton = bar, title, close
+    return win
+end
+
+-- A one-line label; settings text never wraps.
+local function line(parent, template, role)
+    local fs = UI.FontString(parent, template or "GameFontHighlightSmall", role or "muted")
+    fs:SetJustifyH("LEFT")
+    if fs.SetWordWrap then fs:SetWordWrap(false) end
+    return fs
+end
+
+-- A section heading in HammerCore's small capitals.
+local function heading(parent, text, x, y)
+    local fs = UI.FontString(parent, "GameFontNormalSmall", "section")
+    fs:SetPoint("TOPLEFT", x + 2, y)
+    fs:SetText(text:upper())
+    return fs
+end
+
+-- A scroll area with HammerCore's thin bar: an edge track and accent thumb.
+local function themedScroll(parent, left, top, right, bottom)
+    local scroll = CreateFrame("ScrollFrame", nil, parent)
+    scroll:SetPoint("TOPLEFT", left, top)
+    scroll:SetPoint("BOTTOMRIGHT", -(right + 12), bottom)
+    local bar = CreateFrame("Slider", nil, parent)
+    bar:SetOrientation("VERTICAL")
+    bar:SetWidth(4)
+    bar:SetPoint("TOPRIGHT", -right, top)
+    bar:SetPoint("BOTTOMRIGHT", -right, bottom)
+    T.Fill(bar:CreateTexture(nil, "BACKGROUND"), "edge"):SetAllPoints()
+    local thumb = T.Fill(bar:CreateTexture(nil, "ARTWORK"), "accent")
+    thumb:SetSize(4, 36)
+    if bar.SetThumbTexture then bar:SetThumbTexture(thumb) end
+    local content = CreateFrame("Frame", nil, scroll)
+    scroll:SetScrollChild(content)
+    local syncing = false
+    local function update()
+        local range = scroll:GetVerticalScrollRange() or 0
+        bar:SetShown(range > 1)
+        range = math.max(1, range)
+        bar:SetMinMaxValues(0, range)
+        syncing = true
+        bar:SetValue(math.min(range, scroll:GetVerticalScroll() or 0))
+        syncing = false
+    end
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local range = self:GetVerticalScrollRange() or 0
+        self:SetVerticalScroll(math.max(0, math.min(range, (self:GetVerticalScroll() or 0) - delta * 46)))
+    end)
+    scroll:SetScript("OnVerticalScroll", update)
+    scroll:SetScript("OnScrollRangeChanged", update)
+    bar:SetScript("OnValueChanged", function(_, value)
+        if syncing then return end
+        scroll:SetVerticalScroll(math.max(0, math.min(scroll:GetVerticalScrollRange() or 0, value)))
+    end)
+    scroll.hcUpdateBar = update
+    update()
+    return scroll, content, bar
+end
+
+local function setButtonEnabled(button, enabled)
+    enabled = enabled and true or false
+    button:SetEnabled(enabled)
+    button.enabled = enabled
+    if not T.IsClassic() then T.Text(button.Text, enabled and "text" or "muted") end
+end
 
 local function createDialog()
-    local f = CreateFrame("Frame", "HammerLinkExportFrame", UIParent, "BackdropTemplate")
-    f:SetSize(520, 310)
-    f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
-    f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    f:SetBackdropColor(0.077, 0.068, 0.058, 1)
-    f:SetBackdropBorderColor(1, 1, 1, 0.15)
-    f:Hide()
-    f:SetMovable(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    local f = createWindow("HammerLinkExportFrame", UIParent, 520, 310, "HammerLink export")
 
-    local title = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    title:SetPoint("TOP", 0, -18)
-    title:SetText("HammerLink export")
-    local help = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    help:SetPoint("TOPLEFT", 24, -45)
-    help:SetPoint("TOPRIGHT", -24, -45)
-    help:SetJustifyH("LEFT")
-    help:SetTextColor(1, 1, 1, 0.55)
-    help:SetText("Copy this into Consecrated Hammer. It includes the categories chosen in the export chooser. It is local data: nothing is uploaded by the addon.")
+    local help = line(f)
+    help:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 12))
+    help:SetPoint("RIGHT", -PAD, 0)
+    help:SetText("Copy this into Consecrated Hammer.")
 
-    local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 25, -78)
-    scroll:SetPoint("BOTTOMRIGHT", -42, 48)
+    -- The text sits on a field surface, as HammerCore's inputs do.
+    local field = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    field:SetPoint("TOPLEFT", PAD, -(HEADER + 32))
+    field:SetPoint("BOTTOMRIGHT", -PAD, 48)
+    T.Surface(field, "field", "edge")
+
+    local scroll = CreateFrame("ScrollFrame", nil, field, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 6, -6)
+    scroll:SetPoint("BOTTOMRIGHT", -26, 6)
     local box = CreateFrame("EditBox", nil, scroll)
     box:SetMultiLine(true)
     box:SetAutoFocus(false)
     box:SetFontObject("ChatFontNormal")
-    box:SetTextColor(1, 1, 1, 0.75)
+    T.Text(box, "text")
     box:SetWidth(680)
     -- Multiline EditBoxes grow with their content when used as a ScrollFrame
     -- child. Keep only a viewport-sized initial height so long reports can
@@ -47,40 +162,38 @@ local function createDialog()
     scroll:SetScrollChild(box)
     f.scroll = scroll
     f.box = box
-    f.title = title
     f.help = help
+    f.field = field
 
-    local copyHint = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    copyHint:SetPoint("BOTTOMLEFT", 24, 16)
-    copyHint:SetPoint("BOTTOMRIGHT", -124, 16)
-    copyHint:SetJustifyH("LEFT")
-    copyHint:SetWordWrap(true)
-    copyHint:SetMaxLines(2)
+    local copyHint = line(f, "GameFontHighlightSmall", "accent")
+    copyHint:SetPoint("BOTTOMLEFT", PAD + 2, 20)
+    copyHint:SetPoint("RIGHT", -124, 0)
     copyHint:SetText("Press Ctrl+C to copy")
     f.copyHint = copyHint
 
-    local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    close:SetSize(86, 22)
-    close:SetPoint("BOTTOMRIGHT", -24, 14)
+    local close = UI.Button(f, 90, 26)
+    close:SetPoint("BOTTOMRIGHT", -PAD, 12)
     close:SetText("Close")
     close:SetScript("OnClick", function() f:Hide() end)
+    f.close = close
 
     -- WoW stops drawing a scrolling EditBox reliably once it holds a very
     -- large report, and Ctrl+A then jumps to the undrawn end. Large output
     -- goes in a copy box whose text is invisible, under a short preview, so
     -- one Ctrl+C still copies everything. The box must sit in a ScrollFrame:
     -- unclipped, megabytes of text drawn past the dialog blanked the whole UI.
-    local preview = f:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
-    preview:SetPoint("TOPLEFT", 33, -86)
-    preview:SetPoint("BOTTOMRIGHT", -33, 56)
+    local preview = field:CreateFontString(nil, "ARTWORK", "ChatFontNormal")
+    T.Text(preview, "text")
+    preview:SetPoint("TOPLEFT", 8, -8)
+    preview:SetPoint("BOTTOMRIGHT", -8, 8)
     preview:SetJustifyH("LEFT")
     preview:SetJustifyV("TOP")
     preview:SetWordWrap(true)
     preview:SetNonSpaceWrap(true)
     preview:SetMaxLines(13)
-    local copyScroll = CreateFrame("ScrollFrame", nil, f)
-    copyScroll:SetPoint("TOPLEFT", 25, -78)
-    copyScroll:SetPoint("BOTTOMRIGHT", -25, 48)
+    local copyScroll = CreateFrame("ScrollFrame", nil, field)
+    copyScroll:SetPoint("TOPLEFT", 6, -6)
+    copyScroll:SetPoint("BOTTOMRIGHT", -6, 6)
     local copyBox = CreateFrame("EditBox", nil, copyScroll)
     copyBox:SetWidth(700)
     copyBox:SetHeight(230)
@@ -88,8 +201,8 @@ local function createDialog()
     copyBox:SetMultiLine(true)
     copyBox:SetAutoFocus(false)
     copyBox:SetFontObject("ChatFontNormal")
-    copyBox:SetTextColor(0, 0, 0, 0)
-    copyBox:SetHighlightColor(0, 0, 0, 0)
+    copyBox:SetTextColor(T.Unpack("transparent"))
+    copyBox:SetHighlightColor(T.Unpack("transparent"))
     local function selectAll(edit)
         if f:IsShown() and f.copyTarget == edit then
             edit:SetFocus()
@@ -131,8 +244,8 @@ local LARGE_OUTPUT_CHARACTERS = 100000
 local function previewText(output, format)
     if format ~= "ai" then return output:sub(1, 600) .. "..." end
     local lines = {}
-    for line in output:gmatch("[^\n]+") do
-        lines[#lines + 1] = line
+    for text in output:gmatch("[^\n]+") do
+        lines[#lines + 1] = text
         if #lines == 12 then break end
     end
     return table.concat(lines, "\n") .. "\n..."
@@ -145,14 +258,15 @@ local function showOutput(output, snapshot, format)
     dialog.box:SetWidth(compact and 440 or 680)
     dialog.box:SetHeight(compact and 184 or 250)
     dialog.box:SetFontObject(compact and "GameFontHighlightSmall" or "ChatFontNormal")
-    dialog.box:SetTextColor(1, 1, 1, 0.75)
+    T.Text(dialog.box, "text")
     dialog.copyBox:SetWidth(compact and 470 or 700)
     dialog.copyBox:SetHeight(compact and 184 or 230)
     dialog.preview:SetFontObject(compact and "GameFontHighlightSmall" or "ChatFontNormal")
+    T.Text(dialog.preview, "text")
     local kilobytes = ns.FormatCount(math.floor(#output / 1024 + 0.5)) .. " KB"
     if format == "ai" then
         dialog.title:SetText("AI-readable HammerLink report")
-        dialog.help:SetText("Copy this Markdown report into ChatGPT, Claude or another AI. Review it before sharing: it contains the selected character data.")
+        dialog.help:SetText("Paste into ChatGPT, Claude or another AI. Review it first: it holds the selected character data.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete report")
     else
         dialog.title:SetText("Consecrated Hammer export")
@@ -194,24 +308,43 @@ local function showOutput(output, snapshot, format)
     ns.Print(ns.FormatExportSummary(snapshot))
 end
 
+-- `summary` is the row's one line; `detail` is its tooltip.
 local exportCategories = {
-    { key = "equipment", title = "Equipped gear", icon = "Interface\\Icons\\INV_Chest_Chain_05", detail = "Current equipment links and slots." },
-    { key = "bagItems", title = "Bag items", icon = "Interface\\Buttons\\Button-Backpack-Up", detail = "Every occupied backpack, bag and reagent-bag slot." },
-    { key = "bank", title = "Character bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest01", detail = "Open the bank to refresh. Includes legacy bank bags and reagent storage where present." },
-    { key = "warbandBank", title = "Warband Bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Shared account storage. Open the bank to refresh the saved observation." },
-    { key = "guildBank", title = "Guild bank", icon = "Interface\\Icons\\INV_Misc_Coin_01", detail = "Shared guild storage. Visit each viewable tab to refresh; withdrawal rights are not inferred." },
-    { key = "voidStorage", title = "Void storage", icon = "Interface\\Icons\\INV_Misc_Bag_10", detail = "Open void storage to refresh, on clients that still provide it." },
-    { key = "currentSpellbook", title = "Current spellbook", icon = "Interface\\Icons\\INV_Misc_Book_09", detail = "General, class and active-specialisation spells currently exposed by the client." },
-    { key = "talents", title = "Active talents", icon = "Interface\\Icons\\INV_Misc_Book_11", detail = "The active talent import string when the client exposes it." },
-    { key = "vault", title = "Great Vault", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b", detail = "Exact current in-game Vault progress and generated rewards." },
-    { key = "currencyCaps", title = "Currency caps", icon = "Interface\\Icons\\INV_Misc_Coin_01", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
-    { key = "currencies", title = "Current currencies", icon = "Interface\\Icons\\INV_Misc_Coin_02", detail = "Current wallet entries exposed in Retail's currency list. This is a snapshot, not a transaction history." },
-    { key = "reputations", title = "Current reputations", icon = "Interface\\Icons\\INV_Misc_Note_06", detail = "Visible Retail faction standings and progress. Collapsed headers and unavailable client fields are not inferred." },
-    { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05", detail = "Owned Housing Catalog decor, including stored and placed counts." },
-    { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01", detail = "Active quests, objective progress, quest types and available waypoints." },
-    { key = "questHistory", title = "Quest history", icon = "Interface\\Icons\\INV_Misc_Book_09", detail = "All client-reported completion IDs. Names where available; absent IDs stay unknown." },
-    { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03", detail = "|cffffc44dOne-time setup per character:|r Open each profession once. Reopen it after learning something new to refresh the saved cache." },
-    { key = "achievements", title = "Achievements", icon = "Interface\\Icons\\Achievement_General", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
+    { key = "equipment", title = "Equipped gear", icon = "Interface\\Icons\\INV_Chest_Chain_05",
+        summary = "Current gear and slots", detail = "Current equipment links and slots." },
+    { key = "bagItems", title = "Bag items", icon = "Interface\\Buttons\\Button-Backpack-Up",
+        summary = "Bags and reagent bag", detail = "Every occupied backpack, bag and reagent-bag slot." },
+    { key = "bank", title = "Character bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest01",
+        summary = "Saved when you open the bank", detail = "Open the bank to refresh. Includes legacy bank bags and reagent storage where present." },
+    { key = "warbandBank", title = "Warband Bank", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b",
+        summary = "Shared; saved when you open the bank", detail = "Shared account storage. Open the bank to refresh the saved observation." },
+    { key = "guildBank", title = "Guild bank", icon = "Interface\\Icons\\INV_Misc_Coin_01",
+        summary = "Saved for each tab you view", detail = "Shared guild storage. Visit each viewable tab to refresh; withdrawal rights are not inferred." },
+    { key = "voidStorage", title = "Void storage", icon = "Interface\\Icons\\INV_Misc_Bag_10",
+        summary = "Saved when you open it", detail = "Open void storage to refresh, on clients that still provide it." },
+    { key = "currentSpellbook", title = "Current spellbook", icon = "Interface\\Icons\\INV_Misc_Book_09",
+        summary = "General, class and spec spells", detail = "General, class and active-specialisation spells currently exposed by the client." },
+    { key = "talents", title = "Active talents", icon = "Interface\\Icons\\INV_Misc_Book_11",
+        summary = "Active talent import string", detail = "The active talent import string when the client exposes it." },
+    { key = "vault", title = "Great Vault", icon = "Interface\\Icons\\INV_Misc_TreasureChest04b",
+        summary = "Progress and rewards", detail = "Exact current in-game Vault progress and generated rewards." },
+    { key = "currencyCaps", title = "Currency caps", icon = "Interface\\Icons\\INV_Misc_Coin_01",
+        summary = "Crests and capped currencies", detail = "Crests and other capped currencies: amounts, weekly and seasonal caps." },
+    { key = "currencies", title = "Current currencies", icon = "Interface\\Icons\\INV_Misc_Coin_02",
+        summary = "Current wallet", detail = "Current wallet entries exposed in Retail's currency list. This is a snapshot, not a transaction history." },
+    { key = "reputations", title = "Current reputations", icon = "Interface\\Icons\\INV_Misc_Note_06",
+        summary = "Visible faction standings", detail = "Visible Retail faction standings and progress. Collapsed headers and unavailable client fields are not inferred." },
+    { key = "decorInventory", title = "Housing decor inventory", icon = "Interface\\Icons\\INV_Misc_Statue_05",
+        summary = "Owned decor, stored and placed", detail = "Owned Housing Catalog decor, including stored and placed counts." },
+    { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01",
+        summary = "Active quests and objectives", detail = "Active quests, objective progress, quest types and available waypoints." },
+    { key = "questHistory", title = "Quest history", icon = "Interface\\Icons\\INV_Misc_Book_09",
+        summary = "Every completed quest", detail = "All client-reported completion IDs. Names where available; absent IDs stay unknown." },
+    { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03",
+        summary = "|cffffc44dOne-time setup per character:|r open each profession",
+        detail = "One-time setup per character: open each profession once. Reopen it after learning something new to refresh the saved cache." },
+    { key = "achievements", title = "Achievements", icon = "Interface\\Icons\\Achievement_General",
+        summary = "Achievements and criteria progress", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
 }
 
 local function visibleExportCategories()
@@ -222,14 +355,12 @@ local function visibleExportCategories()
     return visible
 end
 
-local exportFormats = {
-    { value = "ai", text = "AI-readable report" },
-    { value = "compact", text = "Consecrated Hammer code" },
-}
-local exportFormatLabels = {
-    ai = "AI-readable report",
-    compact = "Consecrated Hammer code",
-}
+local exportFormatValues = { "ai", "compact" }
+local exportFormatLabels = { "AI-readable report", "Consecrated Hammer code" }
+
+local achievementScopeValues = { "dungeons", "all", "currentExpansion", "incomplete", "selected" }
+local achievementScopeLabels = { "Dungeons & Raids", "All discoverable achievements", "Current expansion",
+    "Incomplete achievements only", "Selected categories" }
 
 local LARGE_SECTION_CHARACTERS = 5000
 
@@ -246,37 +377,28 @@ end
 local function createWarning(parent)
     local warning = CreateFrame("Frame", nil, parent)
     warning:SetSize(18, 18)
-    local mark = warning:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    local mark = UI.FontString(warning, "GameFontNormal", "accent")
     mark:SetAllPoints()
     mark:SetJustifyH("CENTER")
-    mark:SetText("|cffffc44d!|r")
+    mark:SetText("!")
     warning:EnableMouse(true)
-    warning:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Large AI-readable section")
-        GameTooltip:AddLine(self.tooltipText or "This category will add a lot of text.", 1, 1, 1, true)
-        GameTooltip:Show()
+    UI.AttachHint(warning, "Large AI-readable section", function()
+        return warning.tooltipText or "This category will add a lot of text."
     end)
-    warning:SetScript("OnLeave", function() GameTooltip:Hide() end)
     warning:Hide()
     return warning
 end
 
 local function createActionNotice(parent)
     local notice = CreateFrame("Frame", nil, parent)
-    notice:SetSize(20, 20)
+    notice:SetSize(18, 18)
     local icon = notice:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
     icon:SetAtlas("QuestNormal")
     notice.icon = icon
     notice:EnableMouse(true)
-    notice:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Action required")
-        GameTooltip:AddLine("Open each profession once on this character. Reopen it after learning recipes to refresh the saved cache.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    notice:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    UI.AttachHint(notice, "Action required",
+        "Open each profession once on this character. Reopen it after learning recipes to refresh the saved cache.")
     return notice
 end
 
@@ -314,18 +436,18 @@ local function refreshChooser(f)
         local checked = ns.IsExportEnabled(category.key)
         local info = ns.GetExportCategoryInfo(f.snapshot, category.key, f.format == "ai")
         local row = f.rows[category.key]
-        row.check:SetChecked(checked)
+        row.toggle:SetChecked(checked)
         local storageProgress = ns.StorageProgress and ns.StorageProgress[category.key]
         if checked and storageProgress and storageProgress.active then f.storageLoading = true end
         if storageProgress and storageProgress.active then
-            row.count:SetText("|cffaaaaaaReading " .. ns.FormatCount(storageProgress.processed) .. " slots|r")
+            row.count:SetText("Reading " .. ns.FormatCount(storageProgress.processed) .. " slots")
         elseif (category.key == "achievements" and f.achievementLoading)
             or (category.key == "questHistory" and f.questHistoryLoading) then
-            row.count:SetText("|cffaaaaaaCollecting...|r")
+            row.count:SetText("Collecting...")
         elseif info.unavailable then
-            row.count:SetText("|cffaaaaaaUnavailable|r")
+            row.count:SetText("Unavailable")
         else
-            row.count:SetText("|cffaaaaaa" .. recordCountText(info.count) .. "|r")
+            row.count:SetText(recordCountText(info.count))
         end
         local large = f.format == "ai" and checked and info.characters >= LARGE_SECTION_CHARACTERS
         if large then
@@ -342,8 +464,8 @@ local function refreshChooser(f)
             selectedCharacters = selectedCharacters + info.characters
         end
     end
-    UIDropDownMenu_SetSelectedValue(f.formatDropdown, f.format)
-    UIDropDownMenu_SetText(f.formatDropdown, exportFormatLabels[f.format])
+    -- The selects read the saved format and scope.
+    for _, render in ipairs(f.hcRefresh) do render() end
     local footer = recordCountText(selectedCount) .. " across " .. tostring(selectedCategories) .. " categories"
     if f.format == "ai" then
         footer = footer .. " · about " .. kilobyteText(selectedCharacters)
@@ -351,24 +473,16 @@ local function refreshChooser(f)
         footer = footer .. " · compressed when generated"
     end
     f.summary:SetText(footer)
-    if f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating then
-        f.generate:Disable()
-    else
-        f.generate:Enable()
-    end
+    setButtonEnabled(f.generate, not (f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating))
     refreshCollectionStatus(f)
     if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
     f.exportWarning:SetShown(f.storageLoading or f.generating or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
-    if f.achievementScope then
-        local options = ns.GetAchievementOptions()
-        UIDropDownMenu_SetSelectedValue(f.achievementScope, options.scope)
-        UIDropDownMenu_SetText(f.achievementScope, f.achievementLabels[options.scope])
-        local needsCategories = options.scope == "selected" or options.scope == "currentExpansion"
-        f.achievementCategories:SetShown(needsCategories)
-        f.achievementHint:SetText(options.scope == "currentExpansion"
-            and "Choose this client's current expansion categories. Descendants are included."
-            or "Missing achievements remain unknown. Incomplete criteria are included.")
-    end
+    local options = ns.GetAchievementOptions()
+    local needsCategories = options.scope == "selected" or options.scope == "currentExpansion"
+    f.achievementCategories:SetShown(needsCategories)
+    f.achievementHint:SetText(options.scope == "currentExpansion"
+        and "Choose this client's current expansion categories. Descendants are included."
+        or "Missing achievements remain unknown. Incomplete criteria are included.")
 end
 
 -- Storage reads run independently while the relevant game window is open.
@@ -443,31 +557,63 @@ local function collectAchievements(f)
     end)
 end
 
+-- Rows alternate HammerCore's two stripe fills, and brighten on hover.
+local function stripeRole(index) return index % 2 == 1 and "stripe" or "content" end
+
+local function hoverRow(row, index)
+    row:SetScript("OnEnter", function(self) T.Fill(self.fill, "hover") end)
+    row:SetScript("OnLeave", function(self) T.Fill(self.fill, stripeRole(index)) end)
+end
+
+-- The on/off control at a row's right: a switch, or Blizzard's checkbox
+-- under the Classic theme (as UI.Check does). The row takes the clicks.
+local TOGGLE_WIDTH = 68
+local function createToggle(row)
+    local toggle
+    if T.IsClassic() then
+        toggle = UI.CheckButton(row)
+        toggle:SetPoint("RIGHT", -(UI.CELL_INSET + 9), 0)
+    else
+        toggle = UI.Switch(row)
+        toggle:SetPoint("TOPRIGHT")
+        toggle:SetPoint("BOTTOMRIGHT")
+        toggle:SetWidth(TOGGLE_WIDTH)
+    end
+    toggle:EnableMouse(false)
+    return toggle
+end
+
 local function showAchievementCategoryPicker(f)
     local picker = f.achievementPicker
     if not picker then
-        picker = CreateFrame("Frame", "HammerLinkAchievementCategories", f, "BackdropTemplate")
-        picker:SetSize(540, 470)
-        picker:SetPoint("CENTER")
-        picker:SetFrameStrata("FULLSCREEN_DIALOG")
-        picker:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
-        local title = picker:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        title:SetPoint("TOP", 0, -22)
-        title:SetText("Choose achievement categories and their descendants")
-        local search = CreateFrame("EditBox", nil, picker, "InputBoxTemplate")
-        search:SetSize(450, 24)
-        search:SetPoint("TOPLEFT", 38, -53)
+        local WIDTH = 540
+        picker = createWindow("HammerLinkAchievementCategories", f, WIDTH, 470, "Achievement categories", "FULLSCREEN_DIALOG")
+        local help = line(picker)
+        help:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 12))
+        help:SetText("Each category includes its descendants.")
+
+        local search = CreateFrame("EditBox", nil, picker, "BackdropTemplate")
+        search:SetHeight(26)
+        search:SetPoint("TOPLEFT", PAD, -(HEADER + 32))
+        search:SetPoint("RIGHT", -PAD, 0)
         search:SetAutoFocus(false)
+        search:SetFontObject(ChatFontNormal)
+        search:SetTextInsets(8, 8, 0, 0)
+        T.Surface(search, "field", "edge")
+        T.Text(search, "text")
         search:SetScript("OnEscapePressed", function() picker:Hide() end)
-        local scroll = CreateFrame("ScrollFrame", nil, picker, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", 25, -90)
-        scroll:SetPoint("BOTTOMRIGHT", -46, 52)
-        local content = CreateFrame("Frame", nil, scroll)
-        content:SetSize(460, 300)
-        scroll:SetScrollChild(content)
+        local placeholder = line(search)
+        placeholder:SetPoint("LEFT", 8, 0)
+        placeholder:SetText("Search categories")
+        search.placeholder = placeholder
+
+        local scroll, content = themedScroll(picker, PAD, -(HEADER + 68), PAD, 52)
+        local contentWidth = WIDTH - PAD * 2 - 12
+        content:SetSize(contentWidth, 1)
         picker.rows = {}
         local function refresh()
             local query = (search:GetText() or ""):lower()
+            placeholder:SetShown(query == "")
             local options = ns.GetAchievementOptions()
             local ids = options.scope == "currentExpansion" and options.expansionCategoryIDs or options.categoryIDs
             local selected = {}
@@ -479,11 +625,18 @@ local function showAchievementCategoryPicker(f)
                     visible = visible + 1
                     local row = picker.rows[visible]
                     if not row then
-                        row = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
-                        row:SetSize(28, 28)
-                        row:SetPoint("TOPLEFT", 0, -(visible - 1) * 30)
-                        row.Text:SetWidth(410)
-                        row.Text:SetJustifyH("LEFT")
+                        row = CreateFrame("Button", nil, content)
+                        row:SetSize(contentWidth, 28)
+                        row:SetPoint("TOPLEFT", 0, -(visible - 1) * 28)
+                        row.fill = T.Fill(row:CreateTexture(nil, "BACKGROUND"), stripeRole(visible))
+                        row.fill:SetAllPoints()
+                        row.check = UI.CheckButton(row)
+                        row.check:SetPoint("LEFT", 10, 0)
+                        row.check:EnableMouse(false)
+                        row.check.Text:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+                        if row.check.Text.SetWordWrap then row.check.Text:SetWordWrap(false) end
+                        row.Text = row.check.Text
+                        hoverRow(row, visible)
                         row:SetScript("OnClick", function(self)
                             ns.ToggleAchievementCategory(self.categoryID)
                             refresh()
@@ -492,22 +645,22 @@ local function showAchievementCategoryPicker(f)
                     end
                     row.categoryID = category.id
                     row.Text:SetText(label)
-                    row:SetChecked(selected[category.id] == true)
+                    row.check:SetChecked(selected[category.id] == true)
                     row:Show()
                 end
             end
             for index = visible + 1, #picker.rows do picker.rows[index]:Hide() end
-            content:SetHeight(math.max(300, visible * 30))
+            content:SetHeight(math.max(1, visible * 28))
             if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
+            scroll.hcUpdateBar()
         end
         search:SetScript("OnTextChanged", function() scroll:SetVerticalScroll(0) refresh() end)
-        local done = CreateFrame("Button", nil, picker, "UIPanelButtonTemplate")
-        done:SetSize(100, 24)
-        done:SetPoint("BOTTOM", 0, 20)
+        local done = UI.Button(picker, 100, 26, "primary")
+        done:SetPoint("BOTTOMRIGHT", -PAD, 12)
         done:SetText("Done")
         done:SetScript("OnClick", function() picker:Hide() end)
         picker:SetScript("OnHide", function() collectAchievements(f) end)
-        picker.search, picker.refresh = search, refresh
+        picker.search, picker.refresh, picker.scroll, picker.done = search, refresh, scroll, done
         f.achievementPicker = picker
     end
     picker.categories = ns.GetAchievementCategories()
@@ -522,171 +675,149 @@ local function setFormat(f, format)
     refreshChooser(f)
 end
 
+-- HammerCore's select row (label left, themed select and menu right) on a
+-- plain holder frame, sized to this window rather than the settings page.
+local function selectRow(f, parent, x, y, width, label, hint, values, labels, get, set)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetPoint("TOPLEFT", x, y)
+    holder:SetSize(width, UI.CELL_H)
+    holder.hcRefresh = f.hcRefresh
+    -- Each set refreshes the chooser itself.
+    holder.hcRefreshAll = function() end
+    holder.hcColumns = 1
+    local row, _, button = UI.Dropdown(holder, label, hint, 0, values, labels, get, set, nil, nil, 260)
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", 0, 0)
+    row:SetSize(width, UI.CELL_H)
+    if row.hcStripe then row.hcStripe:SetSize(width, UI.CELL_H) end
+    return button, row
+end
+
 local function createChooserDialog()
-    local f = CreateFrame("Frame", "HammerLinkOptionsFrame", UIParent, "BackdropTemplate")
-    f:SetSize(610, 650)
-    f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
-    f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 32, insets = { left = 11, right = 11, top = 11, bottom = 11 } })
-    f:SetBackdropColor(0.025, 0.02, 0.04, 1)
-    f:Hide()
-    f:SetMovable(true)
-    f:EnableMouse(true)
+    local WIDTH, HEIGHT, FOOTER, ROW_H = 620, 680, 112, 46
+    local f = createWindow("HammerLinkOptionsFrame", UIParent, WIDTH, HEIGHT, "Export")
     f:EnableKeyboard(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetScript("OnKeyDown", function(_, key) if key == "ESCAPE" then f:Hide() end end)
     f:SetPropagateKeyboardInput(false)
+    f.hcRefresh = {}
+    local inner = WIDTH - PAD * 2
 
-    local title = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    title:SetPoint("TOP", 0, -18)
-    title:SetText("What do you want to export?")
-    local intro = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    intro:SetPoint("TOPLEFT", 28, -47)
-    intro:SetWidth(554)
-    intro:SetJustifyH("LEFT")
-    intro:SetText("HammerLink gathers your selected character data. On the next page, copy the results into your favourite chatbot or Consecrated Hammer.")
+    local intro = line(f)
+    intro:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 14))
+    intro:SetPoint("RIGHT", -PAD, 0)
+    intro:SetText("Pick what to gather, then copy it into your favourite chatbot or Consecrated Hammer.")
+    f.intro = intro
 
-    local formatLabel = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    formatLabel:SetPoint("TOPLEFT", 28, -78)
-    formatLabel:SetText("1. Choose a format")
+    f.formatHeading = heading(f, "Format", PAD, -(HEADER + 42))
+    f.formatButton = selectRow(f, f, PAD, -(HEADER + 60), inner, "Export as",
+        "The AI-readable report is Markdown; the code is for Consecrated Hammer.",
+        exportFormatValues, exportFormatLabels,
+        function() return f.format end,
+        function(value) setFormat(f, value) end)
 
-    local formatDropdown = CreateFrame("Frame", "HammerLinkFormatDropdown", f, "UIDropDownMenuTemplate")
-    formatDropdown:SetPoint("TOPLEFT", 12, -96)
-    UIDropDownMenu_SetWidth(formatDropdown, 210)
-    local formatDropdownText = formatDropdown.Text or _G.HammerLinkFormatDropdownText
-    if formatDropdownText then formatDropdownText:SetJustifyH("LEFT") end
-    UIDropDownMenu_Initialize(formatDropdown, function()
-        for _, option in ipairs(exportFormats) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = option.text
-            info.value = option.value
-            info.checked = f.format == option.value
-            info.func = function() setFormat(f, option.value) end
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-    f.formatDropdown = formatDropdown
-
-    local categoryLabel = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    categoryLabel:SetPoint("TOPLEFT", 28, -140)
-    categoryLabel:SetText("2. Choose the data")
-
-    local categoryScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-    categoryScroll:SetPoint("TOPLEFT", 24, -153)
-    categoryScroll:SetPoint("BOTTOMRIGHT", -52, 125)
-    local categoryContent = CreateFrame("Frame", nil, categoryScroll)
+    f.dataHeading = heading(f, "Data", PAD, -(HEADER + 112))
+    local categoryScroll, categoryContent = themedScroll(f, PAD, -(HEADER + 130), PAD, FOOTER)
+    local contentWidth = inner - 12
     f.categories = visibleExportCategories()
-    categoryContent:SetSize(510, math.max(410, #f.categories * 45 + 115))
-    categoryScroll:SetScrollChild(categoryContent)
     f.categoryScroll = categoryScroll
     f.categoryContent = categoryContent
 
     f.rows = {}
     for index, category in ipairs(f.categories) do
-        local rowTop = -4 - (index - 1) * 45
-        local check = CreateFrame("CheckButton", nil, categoryContent, "UICheckButtonTemplate")
-        check:SetSize(28, 28)
-        check:SetPoint("TOPLEFT", 6, rowTop)
-        local categoryIcon = categoryContent:CreateTexture(nil, "ARTWORK")
-        categoryIcon:SetSize(28, 28)
-        categoryIcon:SetPoint("LEFT", check, "RIGHT", 0, 0)
+        local row = CreateFrame("Button", nil, categoryContent)
+        row:SetSize(contentWidth, ROW_H)
+        row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_H)
+        row.fill = T.Fill(row:CreateTexture(nil, "BACKGROUND"), stripeRole(index))
+        row.fill:SetAllPoints()
+        local categoryIcon = row:CreateTexture(nil, "ARTWORK")
+        categoryIcon:SetSize(26, 26)
+        categoryIcon:SetPoint("LEFT", 12, 0)
         categoryIcon:SetTexture(category.icon)
-        check.Text:ClearAllPoints()
-        check.Text:SetPoint("TOPLEFT", categoryIcon, "TOPRIGHT", 5, -1)
-        check.Text:SetHeight(14)
-        check.Text:SetJustifyV("TOP")
-        check.Text:SetText(category.title)
-        check.Text:SetFontObject("GameFontHighlightSmall")
-        local detail = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        detail:SetPoint("TOPLEFT", check.Text, "BOTTOMLEFT", 0, -2)
-        detail:SetWidth(430)
-        detail:SetJustifyH("LEFT")
-        detail:SetText(category.detail)
-        local count = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        count:SetPoint("RIGHT", categoryContent, "RIGHT", -26, 0)
-        count:SetPoint("TOP", categoryContent, "TOP", 0, rowTop - 3)
+        if categoryIcon.SetTexCoord then categoryIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        local title = line(row, "GameFontHighlight", "text")
+        title:SetPoint("TOPLEFT", 50, -8)
+        title:SetText(category.title)
+        local toggle = createToggle(row)
+        local count = line(row, "GameFontHighlightSmall", "muted")
+        count:SetPoint("RIGHT", -TOGGLE_WIDTH, 0)
         count:SetJustifyH("RIGHT")
-        local warning = createWarning(categoryContent)
-        warning:SetPoint("RIGHT", categoryContent, "RIGHT", -4, 0)
-        warning:SetPoint("TOP", categoryContent, "TOP", 0, rowTop)
+        local warning = createWarning(row)
+        warning:SetPoint("RIGHT", count, "LEFT", -6, 0)
+        local detail = line(row)
+        detail:SetPoint("TOPLEFT", 50, -26)
+        detail:SetPoint("RIGHT", -(TOGGLE_WIDTH + 130), 0)
+        detail:SetText(category.summary)
         local actionNotice
         if category.key == "professionRecipes" then
-            actionNotice = createActionNotice(categoryContent)
-            actionNotice:SetPoint("LEFT", check.Text, "RIGHT", 2, 2)
+            actionNotice = createActionNotice(row)
+            actionNotice:SetPoint("LEFT", title, "RIGHT", 4, 1)
         end
-        check:SetScript("OnClick", function(self)
-            ns.db.options[category.key] = self:GetChecked() and true or false
+        hoverRow(row, index)
+        UI.AttachHint(row, category.title, category.detail)
+        row:SetScript("OnClick", function()
+            local checked = not toggle:GetChecked()
+            toggle:SetChecked(checked)
+            ns.db.options[category.key] = checked
             if category.key == "achievements" then collectAchievements(f)
             elseif category.key == "questHistory" then collectQuestHistory(f)
             else refreshChooser(f) end
         end)
-        f.rows[category.key] = { check = check, icon = categoryIcon, detail = detail, count = count, warning = warning, actionNotice = actionNotice }
+        f.rows[category.key] = { frame = row, toggle = toggle, icon = categoryIcon, title = title, detail = detail,
+            hint = category.detail, count = count, warning = warning, actionNotice = actionNotice }
     end
 
-    local scope = CreateFrame("Frame", "HammerLinkAchievementScope", categoryContent, "UIDropDownMenuTemplate")
-    scope:SetPoint("TOPLEFT", 35, -#f.categories * 45 - 2)
-    UIDropDownMenu_SetWidth(scope, 230)
-    local scopeOptions = {
-        { value = "dungeons", text = "Dungeons & Raids" },
-        { value = "all", text = "All discoverable achievements" },
-        { value = "currentExpansion", text = "Current expansion" },
-        { value = "incomplete", text = "Incomplete achievements only" },
-        { value = "selected", text = "Selected categories" },
-    }
-    f.achievementLabels = {}
-    for _, option in ipairs(scopeOptions) do f.achievementLabels[option.value] = option.text end
-    UIDropDownMenu_Initialize(scope, function()
-        for _, option in ipairs(scopeOptions) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text, info.value = option.text, option.value
-            info.checked = ns.GetAchievementOptions().scope == option.value
-            info.func = function() ns.SetAchievementScope(option.value) collectAchievements(f) end
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-    f.achievementScope = scope
-    local chooseCategories = CreateFrame("Button", nil, categoryContent, "UIPanelButtonTemplate")
-    chooseCategories:SetSize(150, 24)
-    chooseCategories:SetPoint("LEFT", scope, "RIGHT", 0, 0)
+    -- Achievement scope, under the list in the same striped style.
+    local scopeTop = -#f.categories * ROW_H - 14
+    f.scopeHeading = heading(categoryContent, "Achievements", 0, scopeTop)
+    f.achievementScope = selectRow(f, categoryContent, 0, scopeTop - 18, contentWidth, "Scope",
+        "Which achievements the export reads.",
+        achievementScopeValues, achievementScopeLabels,
+        function() return ns.GetAchievementOptions().scope end,
+        function(value) ns.SetAchievementScope(value) collectAchievements(f) end)
+    local hintTop = scopeTop - 18 - UI.CELL_H - 10
+    local hint = line(categoryContent)
+    hint:SetPoint("TOPLEFT", UI.CELL_INSET, hintTop - 6)
+    hint:SetPoint("RIGHT", -(UI.CELL_INSET + 160), 0)
+    f.achievementHint = hint
+    local chooseCategories = UI.Button(categoryContent, 150, 24)
+    chooseCategories:SetPoint("TOPRIGHT", -UI.CELL_INSET, hintTop)
     chooseCategories:SetText("Choose categories")
     chooseCategories:SetScript("OnClick", function() showAchievementCategoryPicker(f) end)
+    UI.AttachHint(chooseCategories, "Choose categories", "Pick the achievement categories to read.")
     f.achievementCategories = chooseCategories
-    local hint = categoryContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    hint:SetPoint("TOPLEFT", 62, -#f.categories * 45 - 43)
-    hint:SetWidth(425)
-    hint:SetJustifyH("LEFT")
-    f.achievementHint = hint
+    categoryContent:SetSize(contentWidth, -(hintTop - 24 - 12))
 
-    local summary = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    summary:SetPoint("BOTTOMLEFT", 30, 62)
-    summary:SetWidth(550)
-    summary:SetJustifyH("LEFT")
+    -- Footer: status lines, the record summary, then the actions.
+    local rule = T.Fill(f:CreateTexture(nil, "ARTWORK"), "edge")
+    rule:SetHeight(1)
+    rule:SetPoint("BOTTOMLEFT", PAD, FOOTER - 8)
+    rule:SetPoint("BOTTOMRIGHT", -PAD, FOOTER - 8)
+
+    local summary = line(f, "GameFontHighlightSmall", "text")
+    summary:SetPoint("BOTTOMLEFT", PAD + 2, 52)
+    summary:SetPoint("RIGHT", -PAD, 0)
     f.summary = summary
 
-    local exportWarning = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    local exportWarning = line(f, "GameFontHighlightSmall", "accent")
     exportWarning:SetPoint("BOTTOMLEFT", summary, "TOPLEFT", 0, 8)
-    exportWarning:SetWidth(550)
-    exportWarning:SetJustifyH("LEFT")
+    exportWarning:SetPoint("RIGHT", -PAD, 0)
     exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
     f.exportWarning = exportWarning
 
     local function collectionLine(offset)
-        local line = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        line:SetPoint("BOTTOMLEFT", summary, "TOPLEFT", 0, offset)
-        line:SetWidth(550)
-        line:SetJustifyH("LEFT")
-        line:Hide()
-        return line
+        local status = line(f)
+        status:SetPoint("BOTTOMLEFT", summary, "TOPLEFT", 0, offset)
+        status:SetPoint("RIGHT", -PAD, 0)
+        status:Hide()
+        return status
     end
     f.achievementCollectionStatus = collectionLine(8)
     f.questCollectionStatus = collectionLine(26)
 
-    local reset = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    reset:SetSize(108, 24)
-    reset:SetPoint("BOTTOMLEFT", 28, 23)
+    local reset = UI.Button(f, 110, 26)
+    reset:SetPoint("BOTTOMLEFT", PAD, 12)
     reset:SetText("Enable all")
+    UI.AttachHint(reset, "Enable all", "Switch on every category, achievements and quest history included.")
     reset:SetScript("OnClick", function()
         ns.ResetExportOptions()
         ns.db.options.achievements = true
@@ -695,10 +826,16 @@ local function createChooserDialog()
         collectQuestHistory(f)
         ns.Print("all export categories enabled")
     end)
+    f.enableAll = reset
 
-    local generate = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    generate:SetSize(138, 24)
-    generate:SetPoint("BOTTOMRIGHT", -124, 23)
+    local close = UI.Button(f, 90, 26)
+    close:SetPoint("BOTTOMRIGHT", -PAD, 12)
+    close:SetText("Close")
+    close:SetScript("OnClick", function() f:Hide() end)
+    f.close = close
+
+    local generate = UI.Button(f, 150, 26, "primary")
+    generate:SetPoint("RIGHT", close, "LEFT", -8, 0)
     generate:SetText("Generate export")
     f.generate = generate
     local function finishGeneration()
@@ -732,7 +869,7 @@ local function createChooserDialog()
         else
             f.generating = true
             generate:SetText("Generating...")
-            generate:Disable()
+            setButtonEnabled(generate, false)
             local generationStarted = GetTime()
             f.exportWarning:SetText("Generating: preparing data...")
             f.exportWarning:Show()
@@ -757,12 +894,7 @@ local function createChooserDialog()
         f:Hide()
         showOutput(output, exportedSnapshot or snapshot, f.format)
     end)
-
-    local close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    close:SetSize(86, 24)
-    close:SetPoint("BOTTOMRIGHT", -28, 23)
-    close:SetText("Close")
-    close:SetScript("OnClick", function() f:Hide() end)
+    UI.AttachHint(generate, "Generate export", "Build the export from the switched-on categories.")
     return f
 end
 

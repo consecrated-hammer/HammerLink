@@ -15,6 +15,35 @@ local aboutTips = {
     "The readable report speaks fluent robot, but remains perfectly legible to humans.",
 }
 
+-- Highlights for HammerCore's What's new page, newest first. Every
+-- CurseForge release gets an entry, fixes included (Kevin, 2026-11-09);
+-- HammerCore's tools/whatsnew_check.py fails the release without one. A
+-- `page` adds a link to that settings page.
+local WHATS_NEW = {
+    { version = "0.13.0", date = "2026-11-09", items = {
+        { title = "A fresh coat of paint", text = "Settings got a new look: a cleaner header, switches, a Window scale slider and this What's new page.",
+            kind = "improved" },
+        { title = "Support links", text = "CurseForge, Discord and Buy me a coffee sit at the bottom of the settings window. Hide them on Visibility.",
+            kind = "improved", page = "Visibility" },
+        { title = "Export windows", text = "The export chooser, copy window and achievement picker match the new look, solid by default. Window opacity on the Export page if you like a peek through.",
+            kind = "improved", page = "Export" },
+    } },
+    -- History: written after the fact for releases from before What's new.
+    { version = "0.12.0", date = "2026-11-01", history = true, items = {
+        "Export what your character bank, Warband Bank and guild bank held when you last opened them.",
+    } },
+    { version = "0.11.0", date = "2026-10-17", history = true, items = {
+        "Quest history: every quest you've completed, alongside your current quest log.",
+    } },
+    { version = "0.10.0", date = "2026-10-02", history = true, items = {
+        "Achievements in exports, from Dungeons & Raids up to everything the game will list.",
+    } },
+    { version = "0.9.0", date = "2026-09-26", history = true, items = {
+        { text = "A settings window with your saved export format.", page = "Export" },
+        "A lore quiz, and the same commands as every Consecrated Hammer addon.",
+    } },
+}
+
 HC:Init({
     name = "HammerLink",
     command = "hammerlink",
@@ -42,6 +71,7 @@ HC:Init({
         }, "\n")
     end,
     diagnostics = function() return ns.BuildDiagnosticReport() end,
+    whatsNew = WHATS_NEW,
     about = {
         note = "FROM THE LINKSMITH",
         tips = aboutTips,

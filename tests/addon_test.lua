@@ -45,7 +45,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     equal(HC.Settings:IsShown(), true, toc .. ": the bare command opens settings")
     local names = {}
     for _, spec in ipairs(HC.Settings.order) do names[#names + 1] = spec.name end
-    equal(table.concat(names, ","), "Export,Visibility,Commands,Troubleshooting,About", toc .. ": rail order")
+    equal(table.concat(names, ","), "Export,Visibility,What's new,Commands,Troubleshooting,About", toc .. ": rail order")
     local failures = {}
     for name, err in pairs(HC.Settings.errors) do failures[#failures + 1] = name .. ": " .. err end
     equal(table.concat(failures, "; "), "", toc .. ": every settings page builds")

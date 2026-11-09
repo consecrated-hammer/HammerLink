@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] - 2026-11-09
+
+### Added
+
+- **A fresh coat of paint.** Settings match the other Consecrated Hammer
+  addons: a cleaner header, switches and a Window scale slider so it fits
+  your screen. The export window, copy window and achievement category
+  picker got the same look, and they're solid now rather than see-through.
+  Turn down Window opacity on the Export page if you like a peek at the
+  world behind them.
+- **What's new.** A page under REFERENCE with every release's highlights.
+- **Support links.** CurseForge, Discord and Buy me a coffee in the footer.
+  Hide them on Visibility.
 
 ## [0.12.1] - 2026-11-01
 
