@@ -2,7 +2,7 @@ local addonName, ns = ...
 
 _G.HammerLink = ns
 ns.name = addonName
-ns.VERSION = "0.13.0"
+ns.VERSION = "0.14.0"
 ns.PREFIX = "HL1:"
 
 local MAX_CACHED_PROFESSION_RECIPES = 8192
@@ -73,6 +73,7 @@ end
 function ns.SetExportFormat(format)
     if not ns.db or (format ~= "compact" and format ~= "ai") then return false end
     ns.db.exportFormat = format
+    if ns.ExportFormatChanged then ns.ExportFormatChanged() end
     return true
 end
 

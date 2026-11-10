@@ -216,6 +216,13 @@ local function run(classic)
     pick(chooser.formatButton, "AI-readable report")
     check(chooser.format == "ai" and namespace.db.exportFormat == "ai", "expected AI-readable selection to persist")
     check(chooser.summary.text:find("about", 1, true), "expected AI report character estimate")
+    -- A format change from elsewhere (the minimap menu) reaches the open chooser.
+    check(not namespace.IsExportGenerating(), "nothing is generating yet")
+    namespace.SetExportFormat("compact")
+    check(chooser.format == "compact" and chooser.formatButton.text == "Consecrated Hammer code"
+        and chooser.summary.text:find("compressed when generated", 1, true), "the chooser follows an outside format change")
+    namespace.SetExportFormat("ai")
+    check(chooser.format == "ai" and chooser.formatButton.text == "AI-readable report", "and back")
 
     local function switch(key, on)
         local row = chooser.rows[key]
@@ -262,6 +269,10 @@ local function run(classic)
     pick(chooser.formatButton, "Consecrated Hammer code")
     wow.Click(generate)
     check(chooser.generating and generate.text == "Generating...", "generation must show busy state")
+    check(namespace.IsExportGenerating(), "the menu can tell an export is running")
+    namespace.SetExportFormat("ai")
+    check(chooser.format == "compact", "an export in progress keeps its format")
+    namespace.SetExportFormat("compact")
     check(not generate.enabled, "generation must disable the button while exporting")
     pendingProgress("compressing", 250, 1000)
     check(chooser.exportWarning.shown and chooser.exportWarning.text:find("compressing 25%", 1, true),

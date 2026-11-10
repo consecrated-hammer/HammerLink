@@ -65,6 +65,27 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     wow.Click(HC.Minimap.button, "LeftButton")
     equal(opened, 2, toc .. ": left-clicking the minimap button opens the chooser")
 
+    -- Right-click is HammerCore's menu with HammerLink's extras after settings.
+    equal(HC.Minimap.RightClickMode(), "menu", toc .. ": right-click opens the shared menu")
+    local items = HC.Minimap:MenuItems()
+    local labels = {}
+    for _, item in ipairs(items) do labels[#labels + 1] = item.separator and "-" or item.text end
+    equal(table.concat(labels, ","), "HammerLink settings,-,Export,Format,AI-readable report,Consecrated Hammer code",
+        toc .. ": minimap menu items")
+    items[3].func()
+    equal(opened, 3, toc .. ": the menu's Export opens the chooser")
+    equal(items[5].checked, true, toc .. ": the saved format is ticked")
+    equal(items[6].checked, false, toc .. ": the other format is not ticked")
+    items[6].func()
+    equal(ns.GetExportFormat(), "compact", toc .. ": the menu switches the saved format")
+    items = HC.Minimap:MenuItems()
+    equal(items[6].checked and not items[5].checked, true, toc .. ": the menu follows the new format")
+    items[5].func()
+    equal(ns.GetExportFormat(), "ai", toc .. ": and back")
+    wow.Click(HC.Minimap.button, "RightButton")
+    equal(HC.Menu:IsShown(), true, toc .. ": right-clicking the minimap button opens the menu")
+    HC.Menu:Close()
+
     SlashCmdList.HAMMERLINK("debug")
     equal(HC.Copy.frame.edit:GetText():find("Export format:", 1, true) ~= nil, true,
         toc .. ": debug includes HammerLink's report")

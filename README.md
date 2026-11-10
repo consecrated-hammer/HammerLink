@@ -21,7 +21,7 @@ HammerLink exports your character's live data from the game, either as a readabl
 
 ## Getting started
 
-Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon to open settings. Every category is optional. Pick a format, tick the categories you want, and copy the result.
+Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon for a small menu: settings, Export and the export format. If you'd rather right-click went straight to settings, change Minimap right-click on Visibility. The search box at the top of settings finds any setting by name. Every category is optional. Pick a format, tick the categories you want, and copy the result.
 
 The compact-code copy window selects the full export automatically. Click the
 text to select it again, then press Ctrl+C. The field is read-only so an

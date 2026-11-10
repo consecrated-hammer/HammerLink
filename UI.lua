@@ -675,6 +675,19 @@ local function setFormat(f, format)
     refreshChooser(f)
 end
 
+-- The saved format changed somewhere else (the minimap menu): an open
+-- chooser follows it.  An export in progress keeps the format it started with.
+function ns.ExportFormatChanged()
+    local f = chooserDialog
+    if not f or f.generating then return end
+    f.format = ns.GetExportFormat()
+    if f:IsShown() then refreshChooser(f) end
+end
+
+function ns.IsExportGenerating()
+    return chooserDialog ~= nil and chooserDialog.generating == true
+end
+
 -- HammerCore's select row (label left, themed select and menu right) on a
 -- plain holder frame, sized to this window rather than the settings page.
 local function selectRow(f, parent, x, y, width, label, hint, values, labels, get, set)

@@ -1,9 +1,10 @@
 local addonName, ns = ...
 local HC = ns.HammerCore
 
--- Declares HammerLink to HammerCore: commands, the minimap clicks
--- (export and settings), status, diagnostics and About.  The export chooser stays
--- HammerLink's own main tool; settings are HammerCore's window.
+-- Declares HammerLink to HammerCore: commands, the minimap clicks (export,
+-- and HammerCore's right-click menu), status, diagnostics and About.  The
+-- export chooser stays HammerLink's own main tool; settings are HammerCore's
+-- window.
 
 local aboutTips = {
     "Every bag slot was inspected. The potions are innocent until opened.",
@@ -15,11 +16,34 @@ local aboutTips = {
     "The readable report speaks fluent robot, but remains perfectly legible to humans.",
 }
 
+-- Minimap right-click extras after HammerCore's settings item: open the
+-- export chooser, and switch the saved format.  The format rows wait while an
+-- export is being built, so it keeps the format it started with.
+local FORMATS = { { "ai", "AI-readable report" }, { "compact", "Consecrated Hammer code" } }
+
+function ns.MinimapMenuItems()
+    local items = { { text = "Export", func = function() ns.ShowExport() end }, { title = true, text = "Format" } }
+    local busy = ns.IsExportGenerating and ns.IsExportGenerating() or false
+    local current = ns.GetExportFormat()
+    for _, entry in ipairs(FORMATS) do
+        local value = entry[1]
+        items[#items + 1] = { text = entry[2], checked = current == value, disabled = busy,
+            func = function() ns.SetExportFormat(value) end }
+    end
+    return items
+end
+
 -- Highlights for HammerCore's What's new page, newest first. Every
 -- CurseForge release gets an entry, fixes included (Kevin, 2026-11-09);
 -- HammerCore's tools/whatsnew_check.py fails the release without one. A
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
+    { version = "0.14.0", date = "2026-11-10", items = {
+        { title = "Minimap menu", text = "Right-click the minimap button for Export, the export format and settings. Prefer straight to settings? Change Minimap right-click.",
+            kind = "new", page = "Visibility" },
+        { title = "Settings search", text = "Search box at the top of settings. Type a word, jump to the setting.",
+            kind = "new" },
+    } },
     { version = "0.13.0", date = "2026-11-09", items = {
         { title = "A fresh coat of paint", text = "Settings got a new look: a cleaner header, switches, a Window scale slider and this What's new page.",
             kind = "improved" },
@@ -60,8 +84,8 @@ HC:Init({
         icon = "Interface\\AddOns\\HammerLink\\Textures\\HammerLinkClean",
         leftClick = function() ns.ShowExport() end,
         leftClickLabel = "export",
-        rightClick = function() HC.Settings:Toggle() end,
-        rightClickLabel = "settings",
+        -- Right-click is HammerCore's menu: settings, then these.
+        menu = function() return ns.MinimapMenuItems() end,
     },
     status = function()
         local recipes = ns.GetProfessionRecipes and ns.GetProfessionRecipes() or nil

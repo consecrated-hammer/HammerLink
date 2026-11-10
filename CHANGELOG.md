@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.14.0] - 2026-11-10
+
+### Added
+
+- **Minimap menu.** Right-click the minimap button for a little menu:
+  settings, Export, and a quick switch between the AI-readable report and
+  the Consecrated Hammer code. Liked it the old way? Set Minimap right-click
+  on Visibility to Settings.
+- **Settings search.** A search box at the top of the settings window. Type
+  a word, land on the setting. Fewer clicks, more linking.
+
+### Changed
+
+- Updated to HammerCore 0.5.0.
+
 ## [0.13.0] - 2026-11-09
 
 ### Added

@@ -33,7 +33,7 @@ namespace.HammerCore = { Start = function() namespace.started = true end,
     Print = function(message) messages[#messages + 1] = message end }
 assert(loadfile("Numbers.lua"))("HammerLink", namespace)
 assert(loadfile("Core.lua"))("HammerLink", namespace)
-assert(namespace.VERSION == "0.13.0", "expected the visible addon version")
+assert(namespace.VERSION == "0.14.0", "expected the visible addon version")
 assert(namespace.GetMetadata("Version") == "0.3.0", "expected addon metadata helper")
 eventFrame.callback(nil, "ADDON_LOADED", "HammerLink")
 assert(namespace.started, "expected HammerCore to start once saved variables load")
