@@ -1,8 +1,6 @@
 # HammerLink
 
-**Your character, exported.**
-
-_Paste it into your AI agent and watch it finally understand your bags._
+**Your character, exported.**<br>_Paste it into your AI agent and watch it finally understand your bags._
 
 [![Retail](https://img.shields.io/badge/retail-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/hammerlink) [![WoW Forever](https://img.shields.io/badge/wow%20forever-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/hammerlink) [![Release](https://img.shields.io/github/v/release/consecrated-hammer/HammerLink?style=flat-square&color=4c9a7a&label=release)](https://github.com/consecrated-hammer/HammerLink/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](https://github.com/consecrated-hammer/HammerLink/blob/main/LICENSE.txt)
 
