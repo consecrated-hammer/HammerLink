@@ -42,3 +42,7 @@ Development branch pushes do not authorise merging into main, stable tags,
 CurseForge publication or Discord uploads. Review boundaries are in the selected
 wow-addons workstream. `.scratch/` holds ignored synthetic evidence and rollback
 archives, and is excluded from packages.
+
+Export windows use a shared branded header with the same transparent
+HammerLinkClean logo as settings. Keep the window title below the addon name
+and reserve header height before positioning controls.

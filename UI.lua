@@ -7,7 +7,7 @@ local chooserDialog
 
 -- HammerLink's three windows share HammerCore's settings look: an edged
 -- surface, a header bar with the title and a close button, drag by the bar.
-local HEADER, PAD = 40, 16
+local HEADER, PAD = 64, 16
 
 -- Every window, for re-applying the opacity setting live.
 local windows = {}
@@ -29,7 +29,7 @@ end
 
 local function createWindow(name, parent, width, height, titleText, strata)
     local win = CreateFrame("Frame", name, parent or UIParent, "BackdropTemplate")
-    win:SetSize(width, height)
+    win:SetSize(width, height + HEADER - 40)
     win:SetPoint("CENTER")
     win:SetFrameStrata(strata or "DIALOG")
     win:SetToplevel(true)
@@ -60,12 +60,28 @@ local function createWindow(name, parent, width, height, titleText, strata)
     bar:RegisterForDrag("LeftButton")
     bar:SetScript("OnDragStart", function() win:StartMoving() end)
     bar:SetScript("OnDragStop", function() win:StopMovingOrSizing() end)
-    local title = T.Font(UI.FontString(bar, "GameFontNormalLarge", "text"), 16)
-    title:SetPoint("LEFT", PAD, 0)
+    local logo = bar:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(40, 40)
+    logo:SetPoint("LEFT", PAD, 0)
+    logo:SetTexture(HC.spec.icon)
+    local brand = T.Font(UI.FontString(bar, "GameFontNormalLarge", "text"), 20)
+    brand:SetPoint("TOPLEFT", logo, "TOPRIGHT", 12, 0)
+    brand:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -44, -12)
+    brand:SetHeight(22)
+    brand:SetWordWrap(false)
+    brand:SetJustifyH("LEFT")
+    brand:SetText("HammerLink")
+    local title = T.Font(UI.FontString(bar, "GameFontHighlightSmall", "muted"), 12)
+    title:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -4)
+    title:SetPoint("TOPRIGHT", brand, "BOTTOMRIGHT", 0, -4)
+    title:SetHeight(14)
+    title:SetWordWrap(false)
+    title:SetJustifyH("LEFT")
     title:SetText(titleText)
     local close = UI.CloseButton(bar, function() win:Hide() end, 24)
     close:SetPoint("RIGHT", -8, 0)
     win.bar, win.title, win.closeButton = bar, title, close
+    win.logo, win.brand = logo, brand
     return win
 end
 
@@ -263,7 +279,7 @@ end
 local function showOutput(output, snapshot, format)
     dialog = dialog or createDialog()
     local compact = format ~= "ai"
-    dialog:SetSize(compact and 520 or 760, compact and 310 or 360)
+    dialog:SetSize(compact and 520 or 760, (compact and 310 or 360) + HEADER - 40)
     dialog.box:SetWidth(compact and 440 or 680)
     dialog.box:SetHeight(compact and 184 or 250)
     dialog.box:SetFontObject(compact and "GameFontHighlightSmall" or "ChatFontNormal")

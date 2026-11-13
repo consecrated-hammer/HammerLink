@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- A little visual sparkle. HammerLink put on its fancy hat.
+
 ## [0.15.0] - 2026-11-13
 
 ### Changed
