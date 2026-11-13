@@ -59,7 +59,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     equal(format ~= nil and format:GetWidth() >= 240, true, toc .. ": the format select fits its longest choice")
 
     -- Every Export control and useful chooser synonyms enter shared search.
-    local labels = { "Format", "Window opacity", "Open export chooser", "Restore category defaults" }
+    local labels = { "Format", "Window opacity", "Open export chooser", "Reset category defaults" }
     local indexed = {}
     for _, label in ipairs(labels) do
         local matches = HC.Settings:Search(label, 100)
@@ -92,7 +92,12 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     ns.db.options.bagItems, ns.db.options.achievements, ns.db.options.questHistory = false, true, true
     local resetNotice = 0
     ns.ExportChoicesChanged = function() resetNotice = resetNotice + 1 end
-    wow.Click(indexed["Restore category defaults"])
+    wow.Click(indexed["Reset category defaults"])
+    equal(ns.db.options.achievements, true, toc .. ": reset waits for confirmation")
+    wow.Click(HC.Dialog.frame.cancel)
+    equal(ns.db.options.achievements, true, toc .. ": cancelling reset preserves choices")
+    wow.Click(indexed["Reset category defaults"])
+    wow.Click(HC.Dialog.frame.accept)
     equal(ns.db.options.bagItems and not ns.db.options.achievements and not ns.db.options.questHistory, true, toc .. ": default categories retain opt-in semantics")
     equal(ns.GetExportFormat(), "compact", toc .. ": reset keeps format")
     equal(ns.GetWindowOpacity(), 0.75, toc .. ": reset keeps opacity")

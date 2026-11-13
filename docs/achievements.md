@@ -36,7 +36,7 @@ Generation shows its phase, compression/encoding percentage and elapsed time.
 
 | Scope | Selection |
 | --- | --- |
-| All discoverable achievements | Personal achievement categories exposed by the client, including chain ranks |
+| All achievements | Personal achievement categories exposed by the client, including chain ranks |
 | Dungeons & Raids | Category `168` and descendants |
 | Current expansion | Category roots selected by the player for this client's current expansion, plus descendants |
 | Incomplete achievements only | All discoverable achievements whose client completion is false or unknown |

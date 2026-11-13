@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Confirm Reset category defaults before restoring data selections; keep format and achievement setup.
+
 - Call the two formats Readable report and Import code, with clearer saved-data states and chooser help.
 
 ### Changed

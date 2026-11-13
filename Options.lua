@@ -24,9 +24,12 @@ HC.Settings:NewPage({ name = "Export", columns = 1, description = "Saved export 
         function(value) ns.SetWindowOpacity(value / 100) end,
         function(value) return math.floor(value + 0.5) .. "%" end)
     _, y = UI.Header(panel, "Category defaults", y)
-    _, y = UI.ActionButton(panel, y, "Restore category defaults", function()
+    local resetButton
+    resetButton, y = UI.PageReset(panel, y, function()
         ns.ResetExportOptions()
         if ns.ExportChoicesChanged then ns.ExportChoicesChanged() end
-    end, "Reset only data category selections. Keeps saved format, window opacity, achievement scope, selected achievement categories and cached observations.", nil, 210)
+    end, "Reset category defaults", "data category selections")
+    resetButton:SetWidth(210)
+    UI.AttachHint(resetButton, "Reset category defaults", "Reset only data category selections. Keeps format, window opacity, achievement scope, selected achievement categories and saved observations.")
     return y
 end)

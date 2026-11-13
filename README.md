@@ -22,7 +22,7 @@ HammerLink exports your character's live data from the game, either as a readabl
 ## Getting started
 
 Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon for a small menu: settings, Export and the export format. If you'd rather right-click went straight to settings, change Minimap right-click on Visibility. The search box at the top of settings finds any setting by name. Open **Export** in settings for the saved format, **Open export chooser**,
-export-window opacity and **Restore category defaults**. The format is shared
+export-window opacity and **Reset category defaults**. The format is shared
 with the chooser and minimap menu; the last choice is remembered.
 
 In the chooser, start with **Readable report** for reading or an AI chat.
