@@ -544,8 +544,9 @@ local function refreshChooser(f)
     setButtonEnabled(f.generate, not (f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating or f.pickingAchievements))
     refreshCollectionStatus(f)
     if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
-    f.exportWarning:SetShown(f.errorMessage ~= nil or f.storageLoading or f.generating or f.pickingAchievements or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
+    f.exportWarning:SetShown(f.errorMessage ~= nil or f.noticeMessage ~= nil or f.storageLoading or f.generating or f.pickingAchievements or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
     if f.pickingAchievements then f.exportWarning:SetText("Finish choosing achievement categories before generating.") end
+    if f.noticeMessage then f.exportWarning:SetText(f.noticeMessage) end
     if f.errorMessage then f.exportWarning:SetText(f.errorMessage) end
     local options = ns.GetAchievementOptions()
     local enabled = ns.IsExportEnabled("achievements")
@@ -710,8 +711,9 @@ local function showAchievementCategoryPicker(f)
                     table.insert(names, 1, current.name or "Unavailable category")
                     current = picker.byID[current.parentID]
                 end
-                local label = table.concat(names, " > ") .. " [" .. category.id .. "]"
-                if query == "" or label:lower():find(query, 1, true) then
+                local label = table.concat(names, " > ")
+                local searchable = label:lower() .. " " .. tostring(category.id)
+                if query == "" or searchable:find(query, 1, true) then
                     visible = visible + 1
                     local row = picker.rows[visible]
                     if not row then
@@ -898,11 +900,20 @@ local function createChooserDialog()
         UI.AttachHint(row, category.title, category.detail)
         row:SetScript("OnClick", function()
             if f.generating or f.pickingAchievements then return end
-            f.errorMessage = nil
+            f.errorMessage, f.noticeMessage = nil, nil
             local checked = not toggle:GetChecked()
             toggle:SetChecked(checked)
             ns.db.options[category.key] = checked
-            if category.key == "achievements" then collectAchievements(f)
+            if category.key == "achievements" then
+                collectAchievements(f)
+                if checked then
+                    -- Keep the newly revealed setup in view after expanding the list.
+                    if f.categoryScroll.UpdateScrollChildRect then f.categoryScroll:UpdateScrollChildRect() end
+                    local range = f.categoryScroll:GetVerticalScrollRange()
+                    if range == nil then range = f.expandedContentHeight - f.categoryScroll:GetHeight() end
+                    f.categoryScroll:SetVerticalScroll(math.max(0, range))
+                    f.categoryScroll.hcUpdateBar()
+                end
             elseif category.key == "questHistory" then collectQuestHistory(f)
             else refreshChooser(f) end
         end)
@@ -973,10 +984,11 @@ local function createChooserDialog()
     UI.AttachHint(reset, "Enable all", "Switch on every category, achievements and quest history included.")
     reset:SetScript("OnClick", function()
         if f.generating or f.pickingAchievements then return end
+        f.errorMessage, f.noticeMessage = nil, "All export categories enabled."
         for _, category in ipairs(f.categories) do ns.db.options[category.key] = true end
         collectAchievements(f)
         collectQuestHistory(f)
-        ns.Print("all export categories enabled")
+        refreshChooser(f)
     end)
     f.enableAll = reset
     local defaults = UI.Button(f, 150, 26)
@@ -984,6 +996,7 @@ local function createChooserDialog()
     defaults:SetText("Category defaults")
     defaults:SetScript("OnClick", function()
         if f.generating or f.pickingAchievements then return end
+        f.errorMessage, f.noticeMessage = nil, nil
         ns.ResetExportOptions()
         collectAchievements(f)
         collectQuestHistory(f)
@@ -1029,17 +1042,24 @@ local function createChooserDialog()
         finishGeneration()
         f.closing = false
     end)
+    local function blocked(message)
+        refreshChooser(f)
+        f.exportWarning:SetText(message)
+        f.exportWarning:Show()
+    end
     generate:SetScript("OnClick", function()
-        if f.generating or f.pickingAchievements then return end
-        if f.storageLoading then ns.Print("Storage is still being read. Keep its window open and try again shortly.") return end
-        if f.questHistoryLoading then ns.Print("Quest history is still being collected. Try again in a moment.") return end
-        if f.achievementLoading then ns.Print("Achievements are still being collected. Try again in a moment.") return end
+        if f.generating then return end
+        if f.pickingAchievements then blocked("Finish choosing achievement categories before generating.") return end
+        if f.storageLoading then blocked("Storage is still being read. Keep its window open and try again shortly.") return end
+        if f.questHistoryLoading then blocked("Quest history is still being collected. Try again in a moment.") return end
+        if f.achievementLoading then blocked("Achievements are still being collected. Try again in a moment.") return end
         if ns.IsExportEnabled("achievements") and not f.snapshot.achievements then
-            ns.Print("Achievements could not be collected. Retry or switch off achievements.") return
+            blocked("Achievements could not be collected. Retry or switch off achievements.") return
         end
         if ns.IsExportEnabled("questHistory") and not f.snapshot.questHistory then
-            ns.Print("Quest history could not be collected. Retry or switch off quest history.") return
+            blocked("Quest history could not be collected. Retry or switch off quest history.") return
         end
+        f.noticeMessage = nil
         local snapshot = selectedSnapshot(f)
         local ok, output, _, exportedSnapshot
         if f.format == "ai" then
@@ -1101,7 +1121,7 @@ function ns.ShowExport()
     chooserDialog.generating = false
     chooserDialog.generate:SetText("Generate export")
     chooserDialog.cancelExport = nil
-    chooserDialog.errorMessage = nil
+    chooserDialog.errorMessage, chooserDialog.noticeMessage = nil, nil
     chooserDialog.snapshot = snapshot
     chooserDialog.format = ns.GetExportFormat()
     collectAchievements(chooserDialog)

@@ -33,12 +33,11 @@ data. **Enable all** includes achievements and quest history;
 **Category defaults** puts both back off and enables the other supported
 categories. Both keep format, opacity, achievement scope and saved observations.
 
-Achievement controls appear after enabling the category. The category picker
-searches names, IDs and ancestor paths, shows selected roots, and includes their
-descendants. Current expansion uses your explicit category selection.
+Achievement controls scroll into view after enabling the category. The category picker
+shows names and ancestor paths, searches names and hidden IDs, and includes everything inside a selected category. Current expansion uses your explicit category selection.
 **Refresh data** retries or captures again; storage still needs its game window
 opened to collect a new observation. Generate waits for selected collectors,
-then opens the copy window. **Back to choices** returns to the chooser for another
+then opens the copy window. Generate blocking reasons and Enable all confirmation appear in the chooser. **Back to choices** returns to the chooser for another
 capture; **Settings** returns to the Export page. Closing cancels chooser jobs.
 Export windows use HammerCore's Window scale when opened.
 

@@ -302,10 +302,16 @@ local function run(classic)
         completeCollection = function() return immediateCollection(callback) end
         return function() completeCollection = nil end
     end
+    chooser.categoryScroll.GetVerticalScrollRange = function() return math.max(0, chooser.categoryContent:GetHeight() - 300) end
     switch("achievements", true)
     check(chooser.achievementPanel.shown and chooser.categoryContent.height == chooser.expandedContentHeight, "enabling achievements reveals its controls")
+    check(chooser.categoryScroll.scrollPosition > 0, "enabling achievements scrolls its options into view")
     check(chooser.achievementLoading and not generate.enabled, "collection must disable Generate export")
     check(generate.text == "Collecting...", "the disabled button must say why")
+    local messageBefore = namespace.lastMessage
+    generate.scripts.OnClick(generate)
+    check(chooser.exportWarning.shown and chooser.exportWarning.text:find("Achievements are still", 1, true), "blocked generate explains collection inline")
+    check(namespace.lastMessage == messageBefore, "blocked generate does not hide feedback in chat")
     check(chooser.achievementCollectionStatus.shown and chooser.achievementCollectionStatus.text:find("Collecting achievements", 1, true))
     check(chooser.rows.achievements.count.text == "Collecting...", "the row shows collection")
     reportProgress(1234)
@@ -341,8 +347,13 @@ local function run(classic)
     check(picker and picker:IsShown() and picker.title.text == "Achievement categories" and picker.closeButton,
         "the picker opens with the header bar")
     check(picker.strata == "FULLSCREEN_DIALOG" and picker.hcBody.colour[4] == 1, "the picker sits above the chooser, solid")
-    check(picker.rows[1].Text.text == "General [92]" and picker.rows[3].Text.text == "Unavailable category [15234]")
+    check(picker.rows[1].Text.text == "General" and picker.rows[3].Text.text == "Unavailable category")
     check(picker.search.placeholder.shown, "an empty search shows its placeholder")
+    picker.search:SetText("15234")
+    picker.search.scripts.OnTextChanged(picker.search)
+    check(picker.rows[1].categoryID == 15234 and not picker.rows[2].shown, "hidden IDs remain searchable")
+    picker.search:SetText("")
+    picker.search.scripts.OnTextChanged(picker.search)
     wow.Click(picker.rows[1])
     check(achievementOptions.categoryIDs[1] == 92 and picker.rows[1].check:GetChecked() == true, "clicking a row selects its category")
     local originalBaseline = picker.selectionBefore
@@ -351,7 +362,7 @@ local function run(classic)
         "reopening an active picker preserves its original change baseline")
     picker.search:SetText("ques")
     picker.search.scripts.OnTextChanged(picker.search)
-    check(picker.rows[1].Text.text == "Quests [96]" and picker.rows[1].check:GetChecked() == false
+    check(picker.rows[1].Text.text == "Quests" and picker.rows[1].check:GetChecked() == false
         and not picker.rows[2].shown, "search filters the list")
     check(not picker.search.placeholder.shown, "typing hides the placeholder")
     wow.Click(picker.done)
@@ -362,7 +373,7 @@ local function run(classic)
         return { { id = 92, name = "General" }, { id = 93, name = "Child", parentID = 92 } }
     end
     wow.Click(chooser.achievementCategories)
-    check(picker.rows[2].Text.text == "General > Child [93]", "picker shows category ancestry")
+    check(picker.rows[2].Text.text == "General > Child", "picker shows category ancestry")
     check(picker.selection.text:find("1 categories selected", 1, true), "selection feedback counts roots")
     picker.search:SetText("no such category")
     picker.search.scripts.OnTextChanged(picker.search)
@@ -555,6 +566,7 @@ local function run(classic)
     namespace.SetExportFormat("compact")
     namespace.SetWindowOpacity(0.8)
     wow.Click(chooser.enableAll)
+    check(chooser.exportWarning.shown and chooser.exportWarning.text == "All export categories enabled.", "Enable all confirms inline")
     check(namespace.db.options.achievements and namespace.db.options.questHistory, "Enable all includes both optional collectors")
     wow.Click(chooser.defaults)
     check(not namespace.db.options.achievements and not namespace.db.options.questHistory, "defaults restore both opt-in categories to off")
