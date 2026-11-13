@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Call the two formats Readable report and Import code, with clearer saved-data states and chooser help.
+
 ### Changed
 
 - Keep Export settings compact: saved format, the chooser action, export-window

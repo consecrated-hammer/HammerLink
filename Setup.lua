@@ -19,7 +19,7 @@ local aboutTips = {
 -- Minimap right-click extras after HammerCore's settings item: open the
 -- export chooser, and switch the saved format.  The format rows wait while an
 -- export is being built, so it keeps the format it started with.
-local FORMATS = { { "ai", "AI-readable report" }, { "compact", "Consecrated Hammer code" } }
+local FORMATS = { { "ai", "Readable report" }, { "compact", "Import code" } }
 
 function ns.MinimapMenuItems()
     local items = { { text = "Export", func = function() ns.ShowExport() end }, { title = true, text = "Format" } }
@@ -40,7 +40,7 @@ end
 local WHATS_NEW = {
     { version = "0.14.0-dev1", date = "2026-11-13", items = {
         { title = "A clearer export workflow", text = "Grouped data choices, category defaults and Refresh data in the chooser. Achievement controls appear when enabled, with searchable category paths and selection feedback.", kind = "improved", page = "Export" },
-        { title = "Copy and adjust", text = "Change export returns from either copy window to your saved choices. Cached storage shows observation times and partial coverage. Large exports still copy their complete payload.", kind = "improved", page = "Export" },
+        { title = "Copy and adjust", text = "Back to choices returns from either copy window to your saved choices. Cached storage shows observation times and partial coverage. Large exports still copy their complete payload.", kind = "improved", page = "Export" },
     } },
     { version = "0.14.0", date = "2026-11-10", items = {
         { title = "Minimap menu", text = "Right-click the minimap button for Export, the export format and settings. Prefer straight to settings? Change Minimap right-click.",
@@ -94,7 +94,7 @@ HC:Init({
     status = function()
         local recipes = ns.GetProfessionRecipes and ns.GetProfessionRecipes() or nil
         return table.concat({
-            "Export format: " .. (ns.GetExportFormat() == "ai" and "AI-readable report" or "Consecrated Hammer code"),
+            "Export format: " .. (ns.GetExportFormat() == "ai" and "Readable report" or "Import code"),
             "Profession cache: " .. (recipes and recipes.available and "available" or "not captured"),
         }, "\n")
     end,

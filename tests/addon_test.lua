@@ -55,11 +55,11 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     end
 
     HC.Settings:Show("Export")
-    local format = wow.FindButton("AI-readable report")
+    local format = wow.FindButton("Readable report")
     equal(format ~= nil and format:GetWidth() >= 240, true, toc .. ": the format select fits its longest choice")
 
     -- Every Export control and useful chooser synonyms enter shared search.
-    local labels = { "Saved format", "Window opacity", "Open export chooser", "Restore category defaults" }
+    local labels = { "Format", "Window opacity", "Open export chooser", "Restore category defaults" }
     local indexed = {}
     for _, label in ipairs(labels) do
         local matches = HC.Settings:Search(label, 100)
@@ -71,7 +71,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
         equal(HC.Settings:Focus("Export", label) ~= nil, true, toc .. ": focus " .. label)
         indexed[label] = HC.Settings:Focus("Export", label)
     end
-    for _, query in ipairs({ "bank storage", "professions", "quest history", "achievements", "HL1 snapshot" }) do
+    for _, query in ipairs({ "bank storage", "professions", "quest history", "achievements", "Import code" }) do
         local found = false
         for _, match in ipairs(HC.Settings:Search(query, 100)) do
             if match.page == "Export" and match.label == "Open export chooser" then found = true end
@@ -85,7 +85,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
         equal(HC.Settings.errors.Export, nil, toc .. ": Export builds at scale " .. scale)
     end
     HC.Settings:RefreshSearch()
-    equal(HC.Settings:Focus("Export", "Saved format"), indexed["Saved format"], toc .. ": refresh has no stale registration")
+    equal(HC.Settings:Focus("Export", "Format"), indexed["Format"], toc .. ": refresh has no stale registration")
     ns.SetExportFormat("compact")
     ns.SetWindowOpacity(0.75)
     ns.db.achievementOptions = { scope = "selected", categoryIDs = { 92 }, expansionCategoryIDs = { 96 } }
@@ -116,7 +116,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     local items = HC.Minimap:MenuItems()
     local labels = {}
     for _, item in ipairs(items) do labels[#labels + 1] = item.separator and "-" or item.text end
-    equal(table.concat(labels, ","), "HammerLink settings,-,Export,Format,AI-readable report,Consecrated Hammer code",
+    equal(table.concat(labels, ","), "HammerLink settings,-,Export,Format,Readable report,Import code",
         toc .. ": minimap menu items")
     items[3].func()
     equal(opened, 3, toc .. ": the menu's Export opens the chooser")

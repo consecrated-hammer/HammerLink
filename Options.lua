@@ -8,15 +8,15 @@ local UI = HC.UI
 -- One column: the format names are long.
 HC.Settings:NewPage({ name = "Export", columns = 1, description = "Saved export preferences. Choose data in the export chooser." }, function(panel, y)
     _, y = UI.Header(panel, "Export preferences", y, "Interface\\Icons\\INV_Misc_Note_01")
-    _, y = UI.Dropdown(panel, "Saved format", "AI-readable Markdown for reading or pasting into an AI chat; compact HL1 code for importers. Also change this in the chooser or minimap menu. The last choice is remembered.", y,
-        { "ai", "compact" }, { "AI-readable report", "Consecrated Hammer code" },
+    _, y = UI.Dropdown(panel, "Format", "Readable report for you or an AI chat; Import code for the Consecrated Hammer website. Also change this in the chooser or minimap menu. The last choice is remembered.", y,
+        { "ai", "compact" }, { "Readable report", "Import code" },
         function() return ns.GetExportFormat() end,
         function(value) ns.SetExportFormat(value) end, nil, 150, 240)
     _, y = UI.Text(panel, "Format is shared with the chooser and minimap menu. Category choices are saved in the chooser.", y)
     _, y = UI.ActionButton(panel, y, "Open export chooser", function()
         HC.Settings:Hide()
         ns.ShowExport()
-    end, "Choose data categories, achievements, quest history, bank storage and professions; generate and copy a report or HL1 snapshot.", "primary", 180)
+    end, "Choose data categories, achievements, quest history, bank storage and professions; generate and copy a report or Import code.", "primary", 180)
     _, y = UI.Header(panel, "Export windows", y)
     -- Percent steps: the slider's fill assumes a range wider than 1.
     _, y = UI.Slider(panel, "Window opacity", "How solid the export windows are.", y, 50, 100, 5,
@@ -24,7 +24,6 @@ HC.Settings:NewPage({ name = "Export", columns = 1, description = "Saved export 
         function(value) ns.SetWindowOpacity(value / 100) end,
         function(value) return math.floor(value + 0.5) .. "%" end)
     _, y = UI.Header(panel, "Category defaults", y)
-    _, y = UI.Text(panel, "Restore supported categories to their defaults. Achievements and quest history stay off. Format, opacity and achievement scope are kept.", y)
     _, y = UI.ActionButton(panel, y, "Restore category defaults", function()
         ns.ResetExportOptions()
         if ns.ExportChoicesChanged then ns.ExportChoicesChanged() end

@@ -14,7 +14,7 @@ HammerLink exports your character's live data from the game, either as a readabl
 
 ## What it does
 
-- **Two formats.** The AI-readable report is structured Markdown with names, IDs and clearly labelled gaps. The `HL1:` snapshot is compact and versioned for importers.
+- **Two formats.** The Readable report is structured Markdown with names, IDs and clearly labelled gaps. The `HL1:` snapshot is compact and versioned for importers.
 - **Pick what goes in.** The export chooser shows a live count for each category and the total size. Your picks and format are remembered, and big reports get a size warning (it never blocks the export).
 - **Honest about gaps.** The report keeps "you left it out", "the game didn't provide it" and "there's nothing there" separate, so an unopened profession isn't read as having no recipes.
 - **Nothing leaves your PC.** HammerLink makes no network requests. You copy the export yourself.
@@ -25,8 +25,8 @@ Install, then left-click the minimap button or type `/hl export` to open the exp
 export-window opacity and **Restore category defaults**. The format is shared
 with the chooser and minimap menu; the last choice is remembered.
 
-In the chooser, start with **AI-readable report** for reading or an AI chat.
-Choose **Consecrated Hammer code** for an importer that accepts `HL1:`. Data
+In the chooser, start with **Readable report** for reading or an AI chat.
+Choose **Import code** for an importer that accepts `HL1:`. Data
 choices are grouped as equipment/storage, character/abilities and
 progression/collections. Character identity always accompanies the selected
 data. **Enable all** includes achievements and quest history;
@@ -38,7 +38,7 @@ searches names, IDs and ancestor paths, shows selected roots, and includes their
 descendants. Current expansion uses your explicit category selection.
 **Refresh data** retries or captures again; storage still needs its game window
 opened to collect a new observation. Generate waits for selected collectors,
-then opens the copy window. **Change export** returns to the chooser for another
+then opens the copy window. **Back to choices** returns to the chooser for another
 capture; **Settings** returns to the Export page. Closing cancels chooser jobs.
 Export windows use HammerCore's Window scale when opened.
 
@@ -122,7 +122,7 @@ HammerLink records your exact selection rather than guessing an expansion.
 
 The export includes account and character completion separately, dates where
 available, criterion progress, active filters, counts and any failed reads or
-truncation. The AI-readable report puts each achievement on one line under its
+truncation. The Readable report puts each achievement on one line under its
 category and lists criteria only for unfinished ones. The `HL1:` code also keeps
 raw criterion IDs and flags. **An achievement missing from an export is
 unknown, never evidence that it is completed.** Hidden achievements may not be

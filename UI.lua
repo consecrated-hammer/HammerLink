@@ -140,7 +140,7 @@ local function createDialog()
     local help = line(f)
     help:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 12))
     help:SetPoint("RIGHT", -PAD, 0)
-    help:SetText("Copy this into Consecrated Hammer.")
+    help:SetText("Paste this into the Consecrated Hammer website.")
 
     -- The text sits on a field surface, as HammerCore's inputs do.
     local field = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -182,7 +182,7 @@ local function createDialog()
     f.close = close
     local back = UI.Button(f, 130, 26)
     back:SetPoint("BOTTOMLEFT", PAD, 12)
-    back:SetText("Change export")
+    back:SetText("Back to choices")
     back:SetScript("OnClick", function() f:Hide() ns.ShowExport() end)
     f.back = back
 
@@ -274,12 +274,12 @@ local function showOutput(output, snapshot, format)
     T.Text(dialog.preview, "text")
     local kilobytes = ns.FormatCount(math.floor(#output / 1024 + 0.5)) .. " KB"
     if format == "ai" then
-        dialog.title:SetText("AI-readable HammerLink report")
+        dialog.title:SetText("Readable report")
         dialog.help:SetText("Paste into ChatGPT, Claude or another AI. Review it first: it holds the selected character data.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete report")
     else
-        dialog.title:SetText("Consecrated Hammer export")
-        dialog.help:SetText("HL1 code for Consecrated Hammer and compatible importers.")
+        dialog.title:SetText("Import code")
+        dialog.help:SetText("A compact code (HL1) to paste into the Consecrated Hammer website.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete code")
     end
     local large = #output > LARGE_OUTPUT_CHARACTERS
@@ -310,7 +310,7 @@ local function showOutput(output, snapshot, format)
         if C_Timer and C_Timer.After then C_Timer.After(0, refreshScroll) end
     end
     if format == "ai" then
-        ns.Print(("AI-readable report ready: %s characters"):format(ns.FormatCount(#output)))
+        ns.Print(("Readable report ready: %s characters"):format(ns.FormatCount(#output)))
     else
         ns.Print(("export ready: %s characters after compression"):format(ns.FormatCount(#output)))
     end
@@ -348,7 +348,7 @@ local exportCategories = {
     { key = "questLog", title = "Current quest log", icon = "Interface\\Icons\\INV_Misc_Note_01",
         summary = "Active quests and objectives", detail = "Active quests, objective progress, quest types and available waypoints." },
     { key = "questHistory", title = "Quest history", icon = "Interface\\Icons\\INV_Misc_Book_09",
-        summary = "Every completed quest", detail = "All client-reported completion IDs. Names where available; absent IDs stay unknown." },
+        summary = "Every completed quest", detail = "Every quest the game reports as completed, with names where it has them." },
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03",
         summary = "|cffffc44dOne-time setup per character:|r open each profession",
         detail = "One-time setup per character: open each profession once. Reopen it after learning something new to refresh the saved cache." },
@@ -379,10 +379,10 @@ local function visibleExportCategories()
 end
 
 local exportFormatValues = { "ai", "compact" }
-local exportFormatLabels = { "AI-readable report", "Consecrated Hammer code" }
+local exportFormatLabels = { "Readable report", "Import code" }
 
 local achievementScopeValues = { "dungeons", "all", "currentExpansion", "incomplete", "selected" }
-local achievementScopeLabels = { "Dungeons & Raids", "All discoverable achievements", "Current expansion",
+local achievementScopeLabels = { "Dungeons & Raids", "All achievements", "Current expansion",
     "Incomplete achievements only", "Selected categories" }
 
 local LARGE_SECTION_CHARACTERS = 5000
@@ -405,7 +405,7 @@ local function createWarning(parent)
     mark:SetJustifyH("CENTER")
     mark:SetText("!")
     warning:EnableMouse(true)
-    UI.AttachHint(warning, "Large AI-readable section", function()
+    UI.AttachHint(warning, "Large report section", function()
         return warning.tooltipText or "This category will add a lot of text."
     end)
     warning:Hide()
@@ -458,13 +458,13 @@ local function categoryFeedback(f, category, info, checked)
         if value.reason then detail = value.reason end
         if value.available == false then state = "Unavailable" end
         if storageCategories[category.key] and value.available ~= false then
-            state = value.partial and "Cached; partial" or "Cached observation"
-            detail = state .. (value.capturedAt and (" from " .. date("%Y-%m-%d %H:%M", value.capturedAt)) or "")
-                .. ". Open storage to refresh; unobserved slots stay unknown."
+            state = value.partial and "Partly saved" or "Saved"
+            detail = state .. (value.capturedAt and (" " .. date("%d %b %H:%M", value.capturedAt)) or "")
+                .. ". Open it in game to update. Slots you haven't viewed aren't included."
         elseif value.available ~= false and (value.partial or value.truncated or value.changedDuringCollection
             or (type(value.coverage) == "string" and value.coverage:find("partial", 1, true))) then
-            state = "Partial capture"
-            detail = "Partial capture; missing records remain unknown. " .. detail
+            state = "Partly saved"
+            detail = "Partly saved. Missing records aren't included. " .. detail
         end
     end
     if info.unavailable then state = "Unavailable" end
@@ -491,7 +491,7 @@ local function refreshChooser(f)
         local state, detail = categoryFeedback(f, category, info, checked)
         if checked and ((category.key == "achievements" and f.achievementLoading)
             or (category.key == "questHistory" and f.questHistoryLoading)) then
-            detail = "Collecting across frames. Generate is available when collection finishes."
+            detail = "Still reading. You can generate when it finishes."
         end
         row.detail:SetText(detail)
         row.hint = category.detail .. "\n" .. detail
@@ -515,7 +515,7 @@ local function refreshChooser(f)
         elseif state == "Unavailable" or state == "Not collected" then
             row.count:SetText(state)
         else
-            row.count:SetText(recordCountText(info.count) .. ((state == "Partial capture" or (type(f.snapshot[category.key]) == "table" and f.snapshot[category.key].partial)) and " (partial)" or ""))
+            row.count:SetText(recordCountText(info.count) .. ((state == "Partly saved" or (type(f.snapshot[category.key]) == "table" and f.snapshot[category.key].partial)) and " (partial)" or ""))
         end
         local large = f.format == "ai" and checked and info.characters >= LARGE_SECTION_CHARACTERS
         if large then
@@ -554,7 +554,7 @@ local function refreshChooser(f)
     if f.categoryScroll.UpdateScrollChildRect then f.categoryScroll:UpdateScrollChildRect() end
     f.categoryScroll.hcUpdateBar()
     f.formatHelp:SetText(f.format == "ai" and "Readable Markdown for you or an AI chat. Start here if unsure."
-        or "Compact HL1 code for Consecrated Hammer and compatible importers.")
+        or "A compact code (HL1) to paste into the Consecrated Hammer website.")
     for _, control in ipairs({ f.formatButton, f.achievementScope, f.enableAll, f.defaults, f.refresh, f.settings }) do
         setButtonEnabled(control, not (f.generating or f.pickingAchievements))
     end
@@ -674,7 +674,7 @@ local function showAchievementCategoryPicker(f)
         picker = createWindow("HammerLinkAchievementCategories", f, WIDTH, 470, "Achievement categories", "FULLSCREEN_DIALOG")
         local help = line(picker)
         help:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 12))
-        help:SetText("Each category includes its descendants.")
+        help:SetText("Picking a category includes everything inside it.")
 
         local search = CreateFrame("EditBox", nil, picker, "BackdropTemplate")
         search:SetHeight(26)
@@ -727,7 +727,7 @@ local function showAchievementCategoryPicker(f)
                         if row.check.Text.SetWordWrap then row.check.Text:SetWordWrap(false) end
                         row.Text = row.check.Text
                         hoverRow(row, visible)
-                        UI.AttachHint(row, function() return row.Text:GetText() end, "Selecting this root includes its descendants. Checked rows are your explicit roots.")
+                        UI.AttachHint(row, function() return row.Text:GetText() end, "Picking a category includes everything inside it. Checked rows are the categories you picked.")
                         row:SetScript("OnClick", function(self)
                             ns.ToggleAchievementCategory(self.categoryID)
                             refresh()
@@ -743,7 +743,7 @@ local function showAchievementCategoryPicker(f)
             for index = visible + 1, #picker.rows do picker.rows[index]:Hide() end
             picker.empty:SetShown(visible == 0)
             picker.empty:SetText(query == "" and "No categories available from this client." or "No categories match your search.")
-            picker.selection:SetText(#ids .. " selected roots; descendants included. " .. visible .. " shown.")
+            picker.selection:SetText(#ids .. " categories selected. " .. visible .. " shown.")
             content:SetHeight(math.max(1, visible * 28))
             if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
             scroll.hcUpdateBar()
@@ -841,7 +841,7 @@ local function createChooserDialog()
 
     f.formatHeading = heading(f, "Format", PAD, -(HEADER + 42))
     f.formatButton = selectRow(f, f, PAD, -(HEADER + 60), inner, "Export as",
-        "The AI-readable report is Markdown; the code is for Consecrated Hammer.",
+        "Read the report yourself, or paste the Import code into the Consecrated Hammer website.",
         exportFormatValues, exportFormatLabels,
         function() return f.format end,
         function(value) setFormat(f, value) end)
@@ -994,7 +994,7 @@ local function createChooserDialog()
     refresh:SetPoint("BOTTOMLEFT", PAD, 12)
     refresh:SetText("Refresh data")
     refresh:SetScript("OnClick", function() if not f.generating then ns.ShowExport() end end)
-    UI.AttachHint(refresh, "Refresh data", "Retry or refresh this capture, including selected achievements and quest history. Storage only refreshes at its open game window.")
+    UI.AttachHint(refresh, "Refresh data", "Reads everything again. Bank and guild bank only update while their window is open.")
     f.refresh = refresh
     local settings = UI.Button(f, 90, 26)
     settings:SetPoint("LEFT", refresh, "RIGHT", 8, 0)
