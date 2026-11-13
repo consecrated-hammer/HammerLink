@@ -21,7 +21,26 @@ HammerLink exports your character's live data from the game, either as a readabl
 
 ## Getting started
 
-Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon for a small menu: settings, Export and the export format. If you'd rather right-click went straight to settings, change Minimap right-click on Visibility. The search box at the top of settings finds any setting by name. Every category is optional. Pick a format, tick the categories you want, and copy the result.
+Install, then left-click the minimap button or type `/hl export` to open the export chooser. Right-click the icon for a small menu: settings, Export and the export format. If you'd rather right-click went straight to settings, change Minimap right-click on Visibility. The search box at the top of settings finds any setting by name. Open **Export** in settings for the saved format, **Open export chooser**,
+export-window opacity and **Restore category defaults**. The format is shared
+with the chooser and minimap menu; the last choice is remembered.
+
+In the chooser, start with **AI-readable report** for reading or an AI chat.
+Choose **Consecrated Hammer code** for an importer that accepts `HL1:`. Data
+choices are grouped as equipment/storage, character/abilities and
+progression/collections. Character identity always accompanies the selected
+data. **Enable all** includes achievements and quest history;
+**Category defaults** puts both back off and enables the other supported
+categories. Both keep format, opacity, achievement scope and saved observations.
+
+Achievement controls appear after enabling the category. The category picker
+searches names, IDs and ancestor paths, shows selected roots, and includes their
+descendants. Current expansion uses your explicit category selection.
+**Refresh data** retries or captures again; storage still needs its game window
+opened to collect a new observation. Generate waits for selected collectors,
+then opens the copy window. **Change export** returns to the chooser for another
+capture; **Settings** returns to the Export page. Closing cancels chooser jobs.
+Export windows use HammerCore's Window scale when opened.
 
 The compact-code copy window selects the full export automatically. Click the
 text to select it again, then press Ctrl+C. The field is read-only so an
@@ -135,7 +154,9 @@ GPL v3, see [LICENSE.txt](https://github.com/consecrated-hammer/HammerLink/blob/
 
 ## Development
 
-`Copy-ToWoWAddons.local.ps1` copies a clean release-shaped folder to a Retail AddOns directory. CI parses every Lua file with Lua 5.1 and verifies every listed Lua file is in the TOC.
+Use the current HammerCore staging helper for development builds; see
+[DEVELOPMENT.md](DEVELOPMENT.md). CI parses every Lua file with Lua 5.1, runs
+all `tests/*_test.lua` suites and checks both TOCs and the HammerCore pin.
 
 Tagged releases are packaged by GitHub Actions and published to GitHub Releases
 and [CurseForge project 1656375](https://www.curseforge.com/projects/1656375).

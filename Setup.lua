@@ -38,6 +38,10 @@ end
 -- HammerCore's tools/whatsnew_check.py fails the release without one. A
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
+    { version = "0.14.0-dev1", date = "2026-11-13", items = {
+        { title = "A clearer export workflow", text = "Grouped data choices, category defaults and Refresh data in the chooser. Achievement controls appear when enabled, with searchable category paths and selection feedback.", kind = "improved", page = "Export" },
+        { title = "Copy and adjust", text = "Change export returns from either copy window to your saved choices. Cached storage shows observation times and partial coverage. Large exports still copy their complete payload.", kind = "improved", page = "Export" },
+    } },
     { version = "0.14.0", date = "2026-11-10", items = {
         { title = "Minimap menu", text = "Right-click the minimap button for Export, the export format and settings. Prefer straight to settings? Change Minimap right-click.",
             kind = "new", page = "Visibility" },

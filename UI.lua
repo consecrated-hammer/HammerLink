@@ -46,6 +46,10 @@ local function createWindow(name, parent, width, height, titleText, strata)
     windows[#windows + 1] = win
     applyOpacity(win)
     win:Hide()
+    win:SetScript("OnShow", function()
+        local scale = tonumber(HC.State().settingsScale) or 1
+        win:SetScale(parent and parent ~= UIParent and 1 or math.max(0.7, math.min(1.3, scale)))
+    end)
 
     local bar = CreateFrame("Frame", nil, win)
     bar:SetPoint("TOPLEFT", inset, -inset)
@@ -141,7 +145,7 @@ local function createDialog()
     -- The text sits on a field surface, as HammerCore's inputs do.
     local field = CreateFrame("Frame", nil, f, "BackdropTemplate")
     field:SetPoint("TOPLEFT", PAD, -(HEADER + 32))
-    field:SetPoint("BOTTOMRIGHT", -PAD, 48)
+    field:SetPoint("BOTTOMRIGHT", -PAD, 74)
     T.Surface(field, "field", "edge")
 
     local scroll = CreateFrame("ScrollFrame", nil, field, "UIPanelScrollFrameTemplate")
@@ -166,8 +170,8 @@ local function createDialog()
     f.field = field
 
     local copyHint = line(f, "GameFontHighlightSmall", "accent")
-    copyHint:SetPoint("BOTTOMLEFT", PAD + 2, 20)
-    copyHint:SetPoint("RIGHT", -124, 0)
+    copyHint:SetPoint("BOTTOMLEFT", PAD + 2, 48)
+    copyHint:SetPoint("RIGHT", -PAD, 0)
     copyHint:SetText("Press Ctrl+C to copy")
     f.copyHint = copyHint
 
@@ -176,6 +180,11 @@ local function createDialog()
     close:SetText("Close")
     close:SetScript("OnClick", function() f:Hide() end)
     f.close = close
+    local back = UI.Button(f, 130, 26)
+    back:SetPoint("BOTTOMLEFT", PAD, 12)
+    back:SetText("Change export")
+    back:SetScript("OnClick", function() f:Hide() ns.ShowExport() end)
+    f.back = back
 
     -- WoW stops drawing a scrolling EditBox reliably once it holds a very
     -- large report, and Ctrl+A then jumps to the undrawn end. Large output
@@ -270,7 +279,7 @@ local function showOutput(output, snapshot, format)
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete report")
     else
         dialog.title:SetText("Consecrated Hammer export")
-        dialog.help:SetText("Copy the code below into Consecrated Hammer.")
+        dialog.help:SetText("HL1 code for Consecrated Hammer and compatible importers.")
         dialog.copyHint:SetText("Press Ctrl+C to copy the complete code")
     end
     local large = #output > LARGE_OUTPUT_CHARACTERS
@@ -347,10 +356,24 @@ local exportCategories = {
         summary = "Achievements and criteria progress", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
 }
 
+local categoryGroups = {
+    { title = "Equipment and storage", keys = { "equipment", "bagItems", "bank", "warbandBank", "guildBank", "voidStorage" } },
+    { title = "Character and abilities", keys = { "currentSpellbook", "talents", "professionRecipes" } },
+    { title = "Progression and collections", keys = { "vault", "currencyCaps", "currencies", "reputations", "decorInventory", "questLog", "questHistory", "achievements" } },
+}
 local function visibleExportCategories()
-    local visible = {}
-    for _, category in ipairs(exportCategories) do
-        if ns.IsExportSupported(category.key) then visible[#visible + 1] = category end
+    local visible, byKey = {}, {}
+    for _, category in ipairs(exportCategories) do byKey[category.key] = category end
+    for _, group in ipairs(categoryGroups) do
+        local first = true
+        for _, key in ipairs(group.keys) do
+            if ns.IsExportSupported(key) then
+                local category = byKey[key]
+                category.group = first and group.title or nil
+                visible[#visible + 1] = category
+                first = false
+            end
+        end
     end
     return visible
 end
@@ -427,6 +450,32 @@ local function refreshCollectionStatus(f)
     f.exportWarning:SetText("With achievements enabled, generating the export may take about a minute.")
 end
 
+local storageCategories = { bank = true, warbandBank = true, guildBank = true, voidStorage = true }
+local function categoryFeedback(f, category, info, checked)
+    local value = f.snapshot[category.key]
+    local detail, state = category.summary, nil
+    if type(value) == "table" then
+        if value.reason then detail = value.reason end
+        if value.available == false then state = "Unavailable" end
+        if storageCategories[category.key] and value.available ~= false then
+            state = value.partial and "Cached; partial" or "Cached observation"
+            detail = state .. (value.capturedAt and (" from " .. date("%Y-%m-%d %H:%M", value.capturedAt)) or "")
+                .. ". Open storage to refresh; unobserved slots stay unknown."
+        elseif value.available ~= false and (value.partial or value.truncated or value.changedDuringCollection
+            or (type(value.coverage) == "string" and value.coverage:find("partial", 1, true))) then
+            state = "Partial capture"
+            detail = "Partial capture; missing records remain unknown. " .. detail
+        end
+    end
+    if info.unavailable then state = "Unavailable" end
+    if checked and (category.key == "achievements" or category.key == "questHistory") and not value then
+        state = "Not collected"
+        detail = "Not collected. Use Refresh data to retry, or switch this category off."
+    end
+    if not checked then return "Not included", "Not included in this export. " .. detail end
+    return state, detail
+end
+
 local function refreshChooser(f)
     f.storageLoading = false
     local selectedCount = 0
@@ -439,15 +488,34 @@ local function refreshChooser(f)
         row.toggle:SetChecked(checked)
         local storageProgress = ns.StorageProgress and ns.StorageProgress[category.key]
         if checked and storageProgress and storageProgress.active then f.storageLoading = true end
-        if storageProgress and storageProgress.active then
+        local state, detail = categoryFeedback(f, category, info, checked)
+        if checked and ((category.key == "achievements" and f.achievementLoading)
+            or (category.key == "questHistory" and f.questHistoryLoading)) then
+            detail = "Collecting across frames. Generate is available when collection finishes."
+        end
+        row.detail:SetText(detail)
+        row.hint = category.detail .. "\n" .. detail
+        if type(f.snapshot[category.key]) == "table" then
+            for _, tab in ipairs(f.snapshot[category.key].tabs or {}) do
+                row.hint = row.hint .. "\nTab " .. tostring(tab.id) .. ": " .. tostring(tab.status or "unknown")
+                    .. (tab.capturedAt and ("; " .. date("%Y-%m-%d %H:%M", tab.capturedAt)) or "")
+                    .. (tab.reason and ("; " .. tab.reason) or "")
+            end
+        end
+        row.frame.hcHint = row.hint
+        if row.actionNotice then row.actionNotice:SetShown(checked and (info.unavailable or not f.snapshot.professionRecipes)) end
+        row.frame:SetEnabled(not f.generating)
+        if not checked then
+            row.count:SetText("Not included")
+        elseif storageProgress and storageProgress.active then
             row.count:SetText("Reading " .. ns.FormatCount(storageProgress.processed) .. " slots")
         elseif (category.key == "achievements" and f.achievementLoading)
             or (category.key == "questHistory" and f.questHistoryLoading) then
             row.count:SetText("Collecting...")
-        elseif info.unavailable then
-            row.count:SetText("Unavailable")
+        elseif state == "Unavailable" or state == "Not collected" then
+            row.count:SetText(state)
         else
-            row.count:SetText(recordCountText(info.count))
+            row.count:SetText(recordCountText(info.count) .. ((state == "Partial capture" or (type(f.snapshot[category.key]) == "table" and f.snapshot[category.key].partial)) and " (partial)" or ""))
         end
         local large = f.format == "ai" and checked and info.characters >= LARGE_SECTION_CHARACTERS
         if large then
@@ -473,13 +541,28 @@ local function refreshChooser(f)
         footer = footer .. " · compressed when generated"
     end
     f.summary:SetText(footer)
-    setButtonEnabled(f.generate, not (f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating))
+    setButtonEnabled(f.generate, not (f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating or f.pickingAchievements))
     refreshCollectionStatus(f)
     if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
-    f.exportWarning:SetShown(f.storageLoading or f.generating or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
+    f.exportWarning:SetShown(f.errorMessage ~= nil or f.storageLoading or f.generating or f.pickingAchievements or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
+    if f.pickingAchievements then f.exportWarning:SetText("Finish choosing achievement categories before generating.") end
+    if f.errorMessage then f.exportWarning:SetText(f.errorMessage) end
     local options = ns.GetAchievementOptions()
-    local needsCategories = options.scope == "selected" or options.scope == "currentExpansion"
+    local enabled = ns.IsExportEnabled("achievements")
+    f.achievementPanel:SetShown(enabled)
+    f.categoryContent:SetHeight(enabled and f.expandedContentHeight or f.baseContentHeight)
+    if f.categoryScroll.UpdateScrollChildRect then f.categoryScroll:UpdateScrollChildRect() end
+    f.categoryScroll.hcUpdateBar()
+    f.formatHelp:SetText(f.format == "ai" and "Readable Markdown for you or an AI chat. Start here if unsure."
+        or "Compact HL1 code for Consecrated Hammer and compatible importers.")
+    for _, control in ipairs({ f.formatButton, f.achievementScope, f.enableAll, f.defaults, f.refresh, f.settings }) do
+        setButtonEnabled(control, not (f.generating or f.pickingAchievements))
+    end
+    local needsCategories = enabled and (options.scope == "selected" or options.scope == "currentExpansion")
     f.achievementCategories:SetShown(needsCategories)
+    setButtonEnabled(f.achievementCategories, not (f.generating or f.pickingAchievements))
+    local ids = options.scope == "currentExpansion" and options.expansionCategoryIDs or options.categoryIDs
+    f.achievementCategories:SetText("Categories (" .. #ids .. ")")
     f.achievementHint:SetText(options.scope == "currentExpansion"
         and "Choose this client's current expansion categories. Descendants are included."
         or "Missing achievements remain unknown. Incomplete criteria are included.")
@@ -584,6 +667,7 @@ local function createToggle(row)
 end
 
 local function showAchievementCategoryPicker(f)
+    if f.pickingAchievements then return end
     local picker = f.achievementPicker
     if not picker then
         local WIDTH = 540
@@ -620,7 +704,13 @@ local function showAchievementCategoryPicker(f)
             for _, id in ipairs(ids) do selected[id] = true end
             local visible = 0
             for _, category in ipairs(picker.categories) do
-                local label = (category.name or "Unavailable category") .. " [" .. category.id .. "]"
+                local names, seen, current = {}, {}, category
+                while current and not seen[current.id] do
+                    seen[current.id] = true
+                    table.insert(names, 1, current.name or "Unavailable category")
+                    current = picker.byID[current.parentID]
+                end
+                local label = table.concat(names, " > ") .. " [" .. category.id .. "]"
                 if query == "" or label:lower():find(query, 1, true) then
                     visible = visible + 1
                     local row = picker.rows[visible]
@@ -637,6 +727,7 @@ local function showAchievementCategoryPicker(f)
                         if row.check.Text.SetWordWrap then row.check.Text:SetWordWrap(false) end
                         row.Text = row.check.Text
                         hoverRow(row, visible)
+                        UI.AttachHint(row, function() return row.Text:GetText() end, "Selecting this root includes its descendants. Checked rows are your explicit roots.")
                         row:SetScript("OnClick", function(self)
                             ns.ToggleAchievementCategory(self.categoryID)
                             refresh()
@@ -650,28 +741,53 @@ local function showAchievementCategoryPicker(f)
                 end
             end
             for index = visible + 1, #picker.rows do picker.rows[index]:Hide() end
+            picker.empty:SetShown(visible == 0)
+            picker.empty:SetText(query == "" and "No categories available from this client." or "No categories match your search.")
+            picker.selection:SetText(#ids .. " selected roots; descendants included. " .. visible .. " shown.")
             content:SetHeight(math.max(1, visible * 28))
             if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
             scroll.hcUpdateBar()
         end
+        picker.empty = line(content)
+        picker.empty:SetPoint("TOPLEFT", 10, -8)
+        picker.selection = line(picker)
+        picker.selection:SetPoint("BOTTOMLEFT", PAD, 20)
+        picker.selection:SetPoint("RIGHT", -130, 0)
         search:SetScript("OnTextChanged", function() scroll:SetVerticalScroll(0) refresh() end)
         local done = UI.Button(picker, 100, 26, "primary")
         done:SetPoint("BOTTOMRIGHT", -PAD, 12)
         done:SetText("Done")
         done:SetScript("OnClick", function() picker:Hide() end)
-        picker:SetScript("OnHide", function() collectAchievements(f) end)
+        picker:SetScript("OnHide", function()
+            search:ClearFocus()
+            f.pickingAchievements = false
+            if f.closing or not f:IsShown() then return end
+            local options = ns.GetAchievementOptions()
+            local ids = options.scope == "currentExpansion" and options.expansionCategoryIDs or options.categoryIDs
+            if picker.selectionBefore ~= table.concat(ids, ",") then collectAchievements(f)
+            else refreshChooser(f) end
+        end)
         picker.search, picker.refresh, picker.scroll, picker.done = search, refresh, scroll, done
         f.achievementPicker = picker
     end
     picker.categories = ns.GetAchievementCategories()
+    picker.byID = {}
+    for _, category in ipairs(picker.categories) do picker.byID[category.id] = category end
+    local options = ns.GetAchievementOptions()
+    picker.selectionBefore = table.concat(options.scope == "currentExpansion" and options.expansionCategoryIDs or options.categoryIDs, ",")
+    f.pickingAchievements = true
+    refreshChooser(f)
+    picker.scroll:SetVerticalScroll(0)
     picker.search:SetText("")
     picker.refresh()
     picker:Show()
+    picker.search:SetFocus()
 end
 
 local function setFormat(f, format)
     if not ns.SetExportFormat(format) then return end
     f.format = ns.GetExportFormat()
+    f.errorMessage = nil
     refreshChooser(f)
 end
 
@@ -707,18 +823,20 @@ local function selectRow(f, parent, x, y, width, label, hint, values, labels, ge
 end
 
 local function createChooserDialog()
-    local WIDTH, HEIGHT, FOOTER, ROW_H = 620, 680, 112, 46
+    local WIDTH, HEIGHT, FOOTER, ROW_H = 700, 720, 148, 56
     local f = createWindow("HammerLinkOptionsFrame", UIParent, WIDTH, HEIGHT, "Export")
     f:EnableKeyboard(true)
-    f:SetScript("OnKeyDown", function(_, key) if key == "ESCAPE" then f:Hide() end end)
-    f:SetPropagateKeyboardInput(false)
+    f:SetScript("OnKeyDown", function(self, key)
+        self:SetPropagateKeyboardInput(key ~= "ESCAPE")
+        if key == "ESCAPE" then f:Hide() end
+    end)
     f.hcRefresh = {}
     local inner = WIDTH - PAD * 2
 
     local intro = line(f)
     intro:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 14))
     intro:SetPoint("RIGHT", -PAD, 0)
-    intro:SetText("Pick what to gather, then copy it into your favourite chatbot or Consecrated Hammer.")
+    intro:SetText("Choose a format and data, generate, then copy. Your choices are remembered.")
     f.intro = intro
 
     f.formatHeading = heading(f, "Format", PAD, -(HEADER + 42))
@@ -728,18 +846,27 @@ local function createChooserDialog()
         function() return f.format end,
         function(value) setFormat(f, value) end)
 
-    f.dataHeading = heading(f, "Data", PAD, -(HEADER + 112))
-    local categoryScroll, categoryContent = themedScroll(f, PAD, -(HEADER + 130), PAD, FOOTER)
+    f.formatHelp = line(f)
+    f.formatHelp:SetPoint("TOPLEFT", PAD + 2, -(HEADER + 110))
+    f.formatHelp:SetPoint("RIGHT", -PAD, 0)
+    f.dataHeading = heading(f, "Data", PAD, -(HEADER + 138))
+    local categoryScroll, categoryContent = themedScroll(f, PAD, -(HEADER + 158), PAD, FOOTER)
     local contentWidth = inner - 12
     f.categories = visibleExportCategories()
     f.categoryScroll = categoryScroll
     f.categoryContent = categoryContent
 
     f.rows = {}
+    local rowTop = 0
     for index, category in ipairs(f.categories) do
+        if category.group then
+            heading(categoryContent, category.group, 0, -rowTop - 6)
+            rowTop = rowTop + 28
+        end
         local row = CreateFrame("Button", nil, categoryContent)
         row:SetSize(contentWidth, ROW_H)
-        row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_H)
+        row:SetPoint("TOPLEFT", 0, -rowTop)
+        rowTop = rowTop + ROW_H
         row.fill = T.Fill(row:CreateTexture(nil, "BACKGROUND"), stripeRole(index))
         row.fill:SetAllPoints()
         local categoryIcon = row:CreateTexture(nil, "ARTWORK")
@@ -749,16 +876,18 @@ local function createChooserDialog()
         if categoryIcon.SetTexCoord then categoryIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
         local title = line(row, "GameFontHighlight", "text")
         title:SetPoint("TOPLEFT", 50, -8)
+        title:SetPoint("RIGHT", -(TOGGLE_WIDTH + 184), 0)
         title:SetText(category.title)
         local toggle = createToggle(row)
         local count = line(row, "GameFontHighlightSmall", "muted")
-        count:SetPoint("RIGHT", -TOGGLE_WIDTH, 0)
+        count:SetPoint("TOPRIGHT", -TOGGLE_WIDTH, -8)
+        count:SetWidth(160)
         count:SetJustifyH("RIGHT")
         local warning = createWarning(row)
         warning:SetPoint("RIGHT", count, "LEFT", -6, 0)
         local detail = line(row)
         detail:SetPoint("TOPLEFT", 50, -26)
-        detail:SetPoint("RIGHT", -(TOGGLE_WIDTH + 130), 0)
+        detail:SetPoint("RIGHT", -(TOGGLE_WIDTH + 8), 0)
         detail:SetText(category.summary)
         local actionNotice
         if category.key == "professionRecipes" then
@@ -768,6 +897,8 @@ local function createChooserDialog()
         hoverRow(row, index)
         UI.AttachHint(row, category.title, category.detail)
         row:SetScript("OnClick", function()
+            if f.generating or f.pickingAchievements then return end
+            f.errorMessage = nil
             local checked = not toggle:GetChecked()
             toggle:SetChecked(checked)
             ns.db.options[category.key] = checked
@@ -780,25 +911,34 @@ local function createChooserDialog()
     end
 
     -- Achievement scope, under the list in the same striped style.
-    local scopeTop = -#f.categories * ROW_H - 14
-    f.scopeHeading = heading(categoryContent, "Achievements", 0, scopeTop)
-    f.achievementScope = selectRow(f, categoryContent, 0, scopeTop - 18, contentWidth, "Scope",
+    local scopeTop = -rowTop - 14
+    f.baseContentHeight = rowTop
+    local achievementPanel = CreateFrame("Frame", nil, categoryContent)
+    achievementPanel:SetPoint("TOPLEFT", 0, scopeTop)
+    achievementPanel:SetSize(contentWidth, 124)
+    f.achievementPanel = achievementPanel
+    scopeTop = 0
+    f.scopeHeading = heading(achievementPanel, "Achievement options", 0, scopeTop)
+    f.achievementScope = selectRow(f, achievementPanel, 0, scopeTop - 18, contentWidth, "Scope",
         "Which achievements the export reads.",
         achievementScopeValues, achievementScopeLabels,
         function() return ns.GetAchievementOptions().scope end,
         function(value) ns.SetAchievementScope(value) collectAchievements(f) end)
     local hintTop = scopeTop - 18 - UI.CELL_H - 10
-    local hint = line(categoryContent)
+    local hint = line(achievementPanel)
     hint:SetPoint("TOPLEFT", UI.CELL_INSET, hintTop - 6)
     hint:SetPoint("RIGHT", -(UI.CELL_INSET + 160), 0)
+    hint:SetWordWrap(true)
+    hint:SetHeight(42)
     f.achievementHint = hint
-    local chooseCategories = UI.Button(categoryContent, 150, 24)
+    local chooseCategories = UI.Button(achievementPanel, 150, 24)
     chooseCategories:SetPoint("TOPRIGHT", -UI.CELL_INSET, hintTop)
     chooseCategories:SetText("Choose categories")
     chooseCategories:SetScript("OnClick", function() showAchievementCategoryPicker(f) end)
     UI.AttachHint(chooseCategories, "Choose categories", "Pick the achievement categories to read.")
     f.achievementCategories = chooseCategories
-    categoryContent:SetSize(contentWidth, -(hintTop - 24 - 12))
+    f.expandedContentHeight = rowTop + 138
+    categoryContent:SetSize(contentWidth, f.baseContentHeight)
 
     -- Footer: status lines, the record summary, then the actions.
     local rule = T.Fill(f:CreateTexture(nil, "ARTWORK"), "edge")
@@ -824,22 +964,43 @@ local function createChooserDialog()
         status:Hide()
         return status
     end
-    f.achievementCollectionStatus = collectionLine(8)
-    f.questCollectionStatus = collectionLine(26)
+    f.achievementCollectionStatus = collectionLine(30)
+    f.questCollectionStatus = collectionLine(50)
 
     local reset = UI.Button(f, 110, 26)
-    reset:SetPoint("BOTTOMLEFT", PAD, 12)
+    reset:SetPoint("TOPRIGHT", -PAD, -(HEADER + 130))
     reset:SetText("Enable all")
     UI.AttachHint(reset, "Enable all", "Switch on every category, achievements and quest history included.")
     reset:SetScript("OnClick", function()
-        ns.ResetExportOptions()
-        ns.db.options.achievements = true
-        ns.db.options.questHistory = true
+        if f.generating or f.pickingAchievements then return end
+        for _, category in ipairs(f.categories) do ns.db.options[category.key] = true end
         collectAchievements(f)
         collectQuestHistory(f)
         ns.Print("all export categories enabled")
     end)
     f.enableAll = reset
+    local defaults = UI.Button(f, 150, 26)
+    defaults:SetPoint("RIGHT", reset, "LEFT", -8, 0)
+    defaults:SetText("Category defaults")
+    defaults:SetScript("OnClick", function()
+        if f.generating or f.pickingAchievements then return end
+        ns.ResetExportOptions()
+        collectAchievements(f)
+        collectQuestHistory(f)
+    end)
+    UI.AttachHint(defaults, "Category defaults", "Restore category defaults: achievements and quest history off, other supported categories on. Keeps format, opacity and achievement scope.")
+    f.defaults = defaults
+    local refresh = UI.Button(f, 110, 26)
+    refresh:SetPoint("BOTTOMLEFT", PAD, 12)
+    refresh:SetText("Refresh data")
+    refresh:SetScript("OnClick", function() if not f.generating then ns.ShowExport() end end)
+    UI.AttachHint(refresh, "Refresh data", "Retry or refresh this capture, including selected achievements and quest history. Storage only refreshes at its open game window.")
+    f.refresh = refresh
+    local settings = UI.Button(f, 90, 26)
+    settings:SetPoint("LEFT", refresh, "RIGHT", 8, 0)
+    settings:SetText("Settings")
+    settings:SetScript("OnClick", function() f:Hide() HC.Settings:Show("Export") end)
+    f.settings = settings
 
     local close = UI.Button(f, 90, 26)
     close:SetPoint("BOTTOMRIGHT", -PAD, 12)
@@ -858,14 +1019,18 @@ local function createChooserDialog()
         refreshChooser(f)
     end
     f:SetScript("OnHide", function()
+        f.closing = true
+        if f.achievementPicker then f.achievementPicker:Hide() end
+        f.pickingAchievements = false
         if f.cancelExport then f.cancelExport() end
         if f.cancelQuestHistory then f.cancelQuestHistory() f.cancelQuestHistory = nil end
         if f.cancelAchievements then f.cancelAchievements() f.cancelAchievements = nil end
         f.questHistoryLoading, f.achievementLoading = false, false
         finishGeneration()
+        f.closing = false
     end)
     generate:SetScript("OnClick", function()
-        if f.generating then return end
+        if f.generating or f.pickingAchievements then return end
         if f.storageLoading then ns.Print("Storage is still being read. Keep its window open and try again shortly.") return end
         if f.questHistoryLoading then ns.Print("Quest history is still being collected. Try again in a moment.") return end
         if f.achievementLoading then ns.Print("Achievements are still being collected. Try again in a moment.") return end
@@ -883,12 +1048,18 @@ local function createChooserDialog()
             f.generating = true
             generate:SetText("Generating...")
             setButtonEnabled(generate, false)
+            refreshChooser(f)
             local generationStarted = GetTime()
             f.exportWarning:SetText("Generating: preparing data...")
             f.exportWarning:Show()
             f.cancelExport = ns.BuildExportAsync(snapshot, function(code, bytes, exported, err)
                 finishGeneration()
-                if err then ns.Print("Export failed: " .. tostring(err)) return end
+                if err then
+                    f.errorMessage = "Export failed. Refresh data to retry, or reduce selected categories."
+                    ns.Print("Export failed: " .. tostring(err))
+                    refreshChooser(f)
+                    return
+                end
                 f:Hide()
                 showOutput(code, exported, "compact")
             end, function(phase, position, total)
@@ -901,7 +1072,9 @@ local function createChooserDialog()
             return
         end
         if not ok then
+            f.errorMessage = "Export failed. Refresh data to retry, or reduce selected categories."
             ns.Print("Export failed: " .. tostring(output))
+            refreshChooser(f)
             return
         end
         f:Hide()
@@ -917,14 +1090,27 @@ function ns.ShowExport()
         ns.Print("Could not inspect export data: " .. tostring(snapshot))
         return
     end
+    if dialog then dialog:Hide() end
     chooserDialog = chooserDialog or createChooserDialog()
+    if chooserDialog.achievementPicker then
+        chooserDialog.closing = true
+        chooserDialog.achievementPicker:Hide()
+        chooserDialog.closing = false
+    end
     if chooserDialog.cancelExport then chooserDialog.cancelExport() end
     chooserDialog.generating = false
     chooserDialog.generate:SetText("Generate export")
     chooserDialog.cancelExport = nil
+    chooserDialog.errorMessage = nil
     chooserDialog.snapshot = snapshot
     chooserDialog.format = ns.GetExportFormat()
     collectAchievements(chooserDialog)
     collectQuestHistory(chooserDialog)
     chooserDialog:Show()
+end
+
+-- A settings reset changes only selections. Rebuild an open chooser so its
+-- optional collectors are cancelled and the controls follow those choices.
+function ns.ExportChoicesChanged()
+    if chooserDialog and chooserDialog:IsShown() and not chooserDialog.generating then ns.ShowExport() end
 end

@@ -17,6 +17,7 @@ local function instrument()
     local create = wow.CreateFrame
     CreateFrame = function(kind, name, parent, template)
         local frame = create(kind, name, parent, template)
+        frame.SetScale = function(self, scale) self.appliedScale = scale end
         frame.SetMultiLine = function(self, enabled) self.multiline = enabled end
         frame.SetFontObject = function(self, font) self.fontObject = font end
         frame.SetFocus = function(self) self.focused = true end
@@ -46,6 +47,7 @@ local function loadAddon(classic)
     C_Timer = { After = function() end }
     UnitFullName = function() return "Tester", "Realm" end
     time = function() return 1800000000 end
+    date = os.date
     GetTime = function() return 20 end
     GetBuildInfo = function() return "12.1.0", "1", "", 120100 end
     local options = {}
@@ -124,6 +126,7 @@ local function run(classic)
     end
     function namespace.ResetExportOptions()
         for _, category in ipairs(categories) do namespace.db.options[category] = true end
+        namespace.db.options.achievements, namespace.db.options.questHistory = false, false
     end
     function namespace.BuildCompleteSnapshot()
         local options = {}
@@ -288,6 +291,7 @@ local function run(classic)
 
     check(not chooser.exportWarning.shown, "warning must be hidden without achievements")
     check(achievementCollections == 0, "opening the chooser must not scan optional achievements")
+    check(not chooser.achievementPanel.shown and chooser.categoryContent.height == chooser.baseContentHeight, "optional achievement controls collapse when off")
     check(chooser.achievementScope.text == "Dungeons & Raids", "default achievement scope is Dungeons & Raids")
     pick(chooser.formatButton, "AI-readable report")
     local immediateCollection = namespace.CollectAchievements
@@ -299,6 +303,7 @@ local function run(classic)
         return function() completeCollection = nil end
     end
     switch("achievements", true)
+    check(chooser.achievementPanel.shown and chooser.categoryContent.height == chooser.expandedContentHeight, "enabling achievements reveals its controls")
     check(chooser.achievementLoading and not generate.enabled, "collection must disable Generate export")
     check(generate.text == "Collecting...", "the disabled button must say why")
     check(chooser.achievementCollectionStatus.shown and chooser.achievementCollectionStatus.text:find("Collecting achievements", 1, true))
@@ -325,6 +330,7 @@ local function run(classic)
     check(chooser.achievementCategories.shown and chooser.achievementHint.text:find("current expansion categories", 1, true))
 
     -- Achievement category picker.
+    namespace.ShowExport()
     pick(chooser.achievementScope, "Selected categories")
     namespace.GetAchievementCategories = function()
         return { { id = 92, name = "General" }, { id = 96, name = "Quests" }, { id = 15234 } }
@@ -339,6 +345,10 @@ local function run(classic)
     check(picker.search.placeholder.shown, "an empty search shows its placeholder")
     wow.Click(picker.rows[1])
     check(achievementOptions.categoryIDs[1] == 92 and picker.rows[1].check:GetChecked() == true, "clicking a row selects its category")
+    local originalBaseline = picker.selectionBefore
+    wow.Click(chooser.achievementCategories)
+    check(picker.selectionBefore == originalBaseline and not chooser.achievementCategories.enabled,
+        "reopening an active picker preserves its original change baseline")
     picker.search:SetText("ques")
     picker.search.scripts.OnTextChanged(picker.search)
     check(picker.rows[1].Text.text == "Quests [96]" and picker.rows[1].check:GetChecked() == false
@@ -346,6 +356,27 @@ local function run(classic)
     check(not picker.search.placeholder.shown, "typing hides the placeholder")
     wow.Click(picker.done)
     check(not picker:IsShown() and achievementCollections == 1, "Done closes the picker and collects again")
+
+    -- Empty search, ancestry, unchanged close, and parent cancellation.
+    namespace.GetAchievementCategories = function()
+        return { { id = 92, name = "General" }, { id = 93, name = "Child", parentID = 92 } }
+    end
+    wow.Click(chooser.achievementCategories)
+    check(picker.rows[2].Text.text == "General > Child [93]", "picker shows category ancestry")
+    check(picker.selection.text:find("1 selected roots", 1, true), "selection feedback counts roots")
+    picker.search:SetText("no such category")
+    picker.search.scripts.OnTextChanged(picker.search)
+    check(picker.empty.shown and picker.empty.text:find("No categories match", 1, true), "empty search is explicit")
+    local beforeClose = achievementCollections
+    wow.Click(picker.done)
+    check(achievementCollections == beforeClose, "unchanged picker does not restart collection")
+    wow.Click(chooser.achievementCategories)
+    check(picker.scroll.scrollPosition == 0, "reopened picker resets scrolling")
+    check(not generate.enabled, "picker blocks generation until Done")
+    chooser:Hide()
+    check(not picker.shown and achievementCollections == beforeClose and not picker.search.focused,
+        "parent close hides picker without restarting collection or retaining search focus")
+    namespace.ShowExport()
 
     switch("achievements", false)
     check(not chooser.snapshot.achievements, "unchecking achievements discards the scan")
@@ -413,6 +444,7 @@ local function run(classic)
     check(chooser.storageLoading and not generate.enabled, "selected storage scan disables export generation")
     check(chooser.rows.bank.count.text:find("80 slots", 1, true), "the chooser shows storage slot progress")
     check(chooser.exportWarning.text:find("Keep the storage window open", 1, true))
+    check(chooser.exportWarning.points[1][5] ~= chooser.achievementCollectionStatus.points[1][5], "storage warning and achievement progress have distinct positions")
     namespace.StorageProgress = {}
     namespace.StorageChanged()
     check(not chooser.storageLoading and generate.enabled, "finishing storage re-enables generation")
@@ -502,6 +534,46 @@ local function run(classic)
     output.box.highlightedText = false
     output.box.scripts.OnMouseUp(output.box)
     check(output.box.highlightedText and output.box.text == fullMarkdown)
+
+    -- Generation failures stay visible and give an actionable retry.
+    namespace.ShowExport()
+    local buildReport = namespace.BuildAIReport
+    namespace.BuildAIReport = function() error("synthetic failure") end
+    wow.Click(generate)
+    check(chooser:IsShown() and chooser.exportWarning.shown and chooser.exportWarning.text:find("Refresh data", 1, true),
+        "report failure stays inline with retry guidance")
+    namespace.BuildAIReport = buildReport
+    wow.Click(chooser.refresh)
+    check(not chooser.errorMessage, "refresh clears stale failure feedback")
+    wow.Click(generate)
+
+    -- The copy workflow returns to current choices without leaving two windows open.
+    wow.Click(output.back)
+    check(chooser:IsShown() and not output:IsShown(), "Change export returns to the chooser")
+    check(chooser.formatHelp.text:find("Start here", 1, true), "AI format guidance is explicit")
+    local savedScope = achievementOptions.scope
+    namespace.SetExportFormat("compact")
+    namespace.SetWindowOpacity(0.8)
+    wow.Click(chooser.enableAll)
+    check(namespace.db.options.achievements and namespace.db.options.questHistory, "Enable all includes both optional collectors")
+    wow.Click(chooser.defaults)
+    check(not namespace.db.options.achievements and not namespace.db.options.questHistory, "defaults restore both opt-in categories to off")
+    check(namespace.GetExportFormat() == "compact" and namespace.GetWindowOpacity() == 0.8 and achievementOptions.scope == savedScope,
+        "category reset keeps unrelated preferences")
+    check(chooser.rows.questHistory.count.text == "Not included", "omitted is distinct from empty")
+    chooser.snapshot.bank = { available = true, cached = true, partial = true, capturedAt = 1800000000,
+        tabs = { { id = 1, status = "cached", capturedAt = 1799900000, reason = "Latest read incomplete" } } }
+    namespace.StorageChanged()
+    check(chooser.rows.bank.detail.text:find("Cached; partial", 1, true), "cached partial observations are explicit")
+    check(chooser.rows.bank.hint:find("Tab 1: cached", 1, true) and chooser.rows.bank.hint:find("Latest read incomplete", 1, true), "tooltip retains tab coverage and capture context")
+    check(chooser.snapshot.bank.capturedAt == 1800000000 and chooser.snapshot.bank.tabs[1].capturedAt == 1799900000, "display does not change observation times")
+    for _, scale in ipairs({ 0.7, 1.3 }) do
+        namespace.HammerCore.State().settingsScale = scale
+        chooser:Hide()
+        namespace.ShowExport()
+        check(chooser.appliedScale == scale, "standalone chooser follows Window scale on open")
+    end
+    namespace.SetWindowOpacity(1)
 
     -- Window opacity: solid by default; the settings slider applies it live
     -- to every window's backing and nothing else.

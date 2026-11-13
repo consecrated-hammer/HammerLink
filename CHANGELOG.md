@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Keep Export settings compact: saved format, the chooser action, export-window
+  opacity and a reset for category selections only. Search finds every control
+  and the chooser through achievements, quest history, storage and professions.
+- Group chooser categories into equipment/storage, character/abilities and
+  progression/collections. Explain formats beside the selector, distinguish
+  excluded data from empty results, and show cached storage times and tab coverage.
+- Show achievement configuration only when enabled. The category picker shows
+  ancestry, selected-root counts, empty searches and an explicit descendants note.
+- Add Category defaults, Refresh data, Settings and Change export navigation.
+  Defaults preserve format, opacity and achievement scope; achievements and quest
+  history remain opt-in. Enable all includes every supported category.
+- Reserve separate status lines for concurrent collectors and generation. Lock
+  editing during compact generation and show a retry instruction after failure.
+- Export windows follow HammerCore Window scale when opened. Updated vendored
+  HammerCore to 0.5.2 (`3c1eeeb`) for searchable actions and current shared settings.
+
+### Fixed
+
+- Closing an achievement picker without edits no longer restarts collection.
+  Closing or reopening its chooser also closes the picker without starting work.
+
+The HL1 codec, schema, collectors, SavedVariables keys and large-output copy
+safeguards are unchanged. Development builds only; no stable release.
+
 ## [0.14.0] - 2026-11-10
 
 ### Added

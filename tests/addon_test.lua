@@ -58,8 +58,54 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
     local format = wow.FindButton("AI-readable report")
     equal(format ~= nil and format:GetWidth() >= 240, true, toc .. ": the format select fits its longest choice")
 
+    -- Every Export control and useful chooser synonyms enter shared search.
+    local labels = { "Saved format", "Window opacity", "Open export chooser", "Restore category defaults" }
+    local indexed = {}
+    for _, label in ipairs(labels) do
+        local matches = HC.Settings:Search(label, 100)
+        local found
+        for _, match in ipairs(matches) do
+            if match.page == "Export" and match.label == label then found = match end
+        end
+        equal(found ~= nil, true, toc .. ": searchable " .. label)
+        equal(HC.Settings:Focus("Export", label) ~= nil, true, toc .. ": focus " .. label)
+        indexed[label] = HC.Settings:Focus("Export", label)
+    end
+    for _, query in ipairs({ "bank storage", "professions", "quest history", "achievements", "HL1 snapshot" }) do
+        local found = false
+        for _, match in ipairs(HC.Settings:Search(query, 100)) do
+            if match.page == "Export" and match.label == "Open export chooser" then found = true end
+        end
+        equal(found, true, toc .. ": chooser discoverable through " .. query)
+    end
+    for _, scale in ipairs({ 0.7, 1.3 }) do
+        HC.State().settingsScale = scale
+        HC.Settings:ApplyScale()
+        HC.Settings:Show("Export")
+        equal(HC.Settings.errors.Export, nil, toc .. ": Export builds at scale " .. scale)
+    end
+    HC.Settings:RefreshSearch()
+    equal(HC.Settings:Focus("Export", "Saved format"), indexed["Saved format"], toc .. ": refresh has no stale registration")
+    ns.SetExportFormat("compact")
+    ns.SetWindowOpacity(0.75)
+    ns.db.achievementOptions = { scope = "selected", categoryIDs = { 92 }, expansionCategoryIDs = { 96 } }
+    ns.db.options.bagItems, ns.db.options.achievements, ns.db.options.questHistory = false, true, true
+    local resetNotice = 0
+    ns.ExportChoicesChanged = function() resetNotice = resetNotice + 1 end
+    wow.Click(indexed["Restore category defaults"])
+    equal(ns.db.options.bagItems and not ns.db.options.achievements and not ns.db.options.questHistory, true, toc .. ": default categories retain opt-in semantics")
+    equal(ns.GetExportFormat(), "compact", toc .. ": reset keeps format")
+    equal(ns.GetWindowOpacity(), 0.75, toc .. ": reset keeps opacity")
+    equal(ns.db.achievementOptions.categoryIDs[1], 92, toc .. ": reset keeps achievement roots")
+    equal(resetNotice, 1, toc .. ": reset notifies chooser")
+    ns.SetExportFormat("ai")
+
     local opened = 0
     ns.ShowExport = function() opened = opened + 1 end
+    wow.Click(indexed["Open export chooser"])
+    equal(opened, 1, toc .. ": settings action opens chooser")
+    equal(HC.Settings:IsShown(), false, toc .. ": action closes settings")
+    opened = 0
     SlashCmdList.HAMMERLINK("export")
     equal(opened, 1, toc .. ": export opens the chooser")
     wow.Click(HC.Minimap.button, "LeftButton")
@@ -114,3 +160,23 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
 end
 
 io.write("HammerLink addon tests passed\n")
+
+-- Existing preferences survive a normal load, including explicit exclusions.
+do
+    local saved = { schemaVersion = 2, exportFormat = "compact", windowOpacity = 0.65,
+        options = { equipment = false, bank = false, achievements = true, questHistory = true },
+        achievementOptions = { scope = "currentExpansion", categoryIDs = { 92 }, expansionCategoryIDs = { 96 } },
+        storageByCharacter = { fixture = { sentinel = true } }, hammerCore = { settingsScale = 1.3 } }
+    local ns = loadAddon("HammerLink_Camelot.toc", saved)
+    equal(ns.db, saved, "existing saved table retained")
+    equal(ns.GetExportFormat(), "compact", "saved compact format survives load")
+    equal(ns.GetWindowOpacity(), 0.65, "saved opacity survives load")
+    equal(ns.IsExportEnabled("equipment"), false, "explicit exclusion survives load")
+    equal(ns.IsExportEnabled("achievements") and ns.IsExportEnabled("questHistory"), true, "opt-ins survive load")
+    equal(ns.GetAchievementOptions().expansionCategoryIDs[1], 96, "expansion roots survive load")
+    equal(ns.db.storageByCharacter.fixture.sentinel, true, "storage cache not reset")
+    GetBuildInfo = function() return "1.60.1", "1", "", 16001 end
+    for _, key in ipairs({ "vault", "currencies", "currencyCaps", "decorInventory" }) do
+        equal(ns.IsExportSupported(key), false, "Forever excludes " .. key)
+    end
+end
