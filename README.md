@@ -113,10 +113,10 @@ for coverage and client checks.
 
 ## Achievement planning
 
-Tick **Achievements** in the export chooser. It starts with **Dungeons & Raids**,
-including incomplete achievements and criteria. You can also choose all
-discoverable achievements, incomplete only, selected categories, or current
-expansion. For current expansion, choose that client's expansion categories;
+Tick **Achievements** in the export chooser. It starts with **All achievements**,
+including incomplete achievements and criteria. Your saved scope is kept.
+You can also choose Dungeons & Raids, incomplete only, selected categories,
+or current expansion. For current expansion, choose that client's expansion categories;
 HammerLink records your exact selection rather than guessing an expansion.
 
 The export includes account and character completion separately, dates where

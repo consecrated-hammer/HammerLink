@@ -6,7 +6,11 @@ local ticks = {}
 C_Timer = { After = function(_, callback) ticks[#ticks + 1] = callback end }
 assert(loadfile("Numbers.lua"))("HammerLink", ns)
 assert(loadfile("Achievements.lua"))("HammerLink", ns)
-assert(ns.GetAchievementOptions().scope == "dungeons")
+assert(ns.GetAchievementOptions().scope == "all")
+ns.db.achievementOptions = { scope = "dungeons" }
+assert(ns.GetAchievementOptions().scope == "dungeons", "keep a saved scope")
+ns.db.achievementOptions = nil
+ns.SetAchievementScope("dungeons")
 local categories = {
     [168] = { "Donjons et raids", -1 }, [900] = { "Expansion test", 168 },
     [81] = { "Tours de force", -1 }, [15234] = { "Héritage", -1 },

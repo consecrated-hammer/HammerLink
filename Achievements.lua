@@ -35,7 +35,7 @@ end
 function ns.GetAchievementOptions()
     local saved = ns.db and ns.db.achievementOptions or {}
     if type(saved) ~= "table" then saved = {} end
-    local value = { scope = SCOPES[saved.scope] and saved.scope or "dungeons", categoryIDs = {}, expansionCategoryIDs = {} }
+    local value = { scope = SCOPES[saved.scope] and saved.scope or "all", categoryIDs = {}, expansionCategoryIDs = {} }
     for _, key in ipairs({ "categoryIDs", "expansionCategoryIDs" }) do
         local seen = {}
         for _, id in ipairs(type(saved[key]) == "table" and saved[key] or {}) do

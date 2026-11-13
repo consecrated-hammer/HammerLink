@@ -101,7 +101,7 @@ local function run(classic)
         if category == "achievements" or category == "questHistory" then return namespace.db.options[category] == true end
         return namespace.db.options[category] ~= false
     end
-    local achievementOptions = { scope = "dungeons", categoryIDs = {}, expansionCategoryIDs = {} }
+    local achievementOptions = { scope = "all", categoryIDs = {}, expansionCategoryIDs = {} }
     function namespace.GetAchievementOptions() return achievementOptions end
     function namespace.SetAchievementScope(scope) achievementOptions.scope = scope end
     function namespace.GetAchievementCategories() return {} end
@@ -193,7 +193,7 @@ local function run(classic)
     check(chooser.rows.professionRecipes.warning.shown, "expected large rendered AI section warning")
     check(not chooser.rows.professionRecipes.warning.tooltipText:find("still export normally", 1, true), "expected the redundant warning reassurance to be removed")
     check(chooser.rows.professionRecipes.warning.tooltipText:find("KB", 1, true) and not chooser.rows.professionRecipes.warning.tooltipText:find("characters", 1, true), "expected the large-section estimate in KB only")
-    check(chooser.rows.professionRecipes.detail.text:find("One-time setup per character", 1, true), "expected a clear per-character recipe cache requirement")
+    check(chooser.rows.professionRecipes.detail.text == "Open each profession once", "recipe setup summary must fit on its row")
     check(chooser.rows.professionRecipes.title.text == "Learned recipes and techniques", "expected the profession category to cover non-recipe entries honestly")
     check(chooser.rows.professionRecipes.hint:find("Reopen it after learning something new", 1, true), "expected explicit profession cache refresh instructions")
     check(chooser.rows.professionRecipes.frame.hcHint == chooser.rows.professionRecipes.hint, "the full detail is the row's tooltip")
@@ -292,7 +292,7 @@ local function run(classic)
     check(not chooser.exportWarning.shown, "warning must be hidden without achievements")
     check(achievementCollections == 0, "opening the chooser must not scan optional achievements")
     check(not chooser.achievementPanel.shown and chooser.categoryContent.height == chooser.baseContentHeight, "optional achievement controls collapse when off")
-    check(chooser.achievementScope.text == "Dungeons & Raids", "default achievement scope is Dungeons & Raids")
+    check(chooser.achievementScope.text == "All achievements", "default achievement scope is All achievements")
     pick(chooser.formatButton, "Readable report")
     local immediateCollection = namespace.CollectAchievements
     local completeCollection

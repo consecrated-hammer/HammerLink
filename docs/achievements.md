@@ -1,10 +1,10 @@
 # Achievement export contract
 
 Achievements are optional and off by default. `/hl export` adds them to either
-the AI report or compact code. The initial scope is Dungeons & Raids (category
-`168` and descendants), including complete and incomplete achievements and
-all client-exposed criteria. Collection yields every 100 API calls. Generate
-waits for it to finish. Opening the chooser with achievements off does not
+the AI report or compact code. The initial scope is All achievements, including
+complete and incomplete achievements and all client-exposed criteria. Existing
+saved scopes are kept. Collection yields every 100 API calls. Generate waits
+for it to finish. Opening the chooser with achievements off does not
 scan them. Changing scope replaces the scan.
 
 Category indices use the normal category count, matching Blizzard's UI; previous

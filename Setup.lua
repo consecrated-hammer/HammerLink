@@ -39,7 +39,7 @@ end
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
     { version = "0.14.0-dev1", date = "2026-11-13", items = {
-        { title = "A clearer export workflow", text = "Grouped data choices, category defaults and Refresh data in the chooser. Achievement controls scroll into view when enabled, category names and IDs are searchable, and action feedback stays in the chooser.", kind = "improved", page = "Export" },
+        { title = "A clearer export workflow", text = "Larger section headings, clear record counts and short setup summaries. Achievements start with All achievements unless you saved another scope. Controls scroll into view when enabled; category names and IDs are searchable.", kind = "improved", page = "Export" },
         { title = "Copy and adjust", text = "Back to choices returns from either copy window to your saved choices. Cached storage shows observation times and partial coverage. Large exports still copy their complete payload.", kind = "improved", page = "Export" },
     } },
     { version = "0.14.0", date = "2026-11-10", items = {

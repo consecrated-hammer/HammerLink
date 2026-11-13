@@ -350,7 +350,7 @@ local exportCategories = {
     { key = "questHistory", title = "Quest history", icon = "Interface\\Icons\\INV_Misc_Book_09",
         summary = "Every completed quest", detail = "Every quest the game reports as completed, with names where it has them." },
     { key = "professionRecipes", title = "Learned recipes and techniques", icon = "Interface\\Icons\\INV_Scroll_03",
-        summary = "|cffffc44dOne-time setup per character:|r open each profession",
+        summary = "Open each profession once",
         detail = "One-time setup per character: open each profession once. Reopen it after learning something new to refresh the saved cache." },
     { key = "achievements", title = "Achievements", icon = "Interface\\Icons\\Achievement_General",
         summary = "Achievements and criteria progress", detail = "Complete and incomplete achievements, with criteria progress and category IDs." },
@@ -493,7 +493,7 @@ local function refreshChooser(f)
             or (category.key == "questHistory" and f.questHistoryLoading)) then
             detail = "Still reading. You can generate when it finishes."
         end
-        row.detail:SetText(detail)
+        row.detail:SetText(category.key == "professionRecipes" and category.summary or detail)
         row.hint = category.detail .. "\n" .. detail
         if type(f.snapshot[category.key]) == "table" then
             for _, tab in ipairs(f.snapshot[category.key].tabs or {}) do
@@ -864,11 +864,19 @@ local function createChooserDialog()
     f.categoryContent = categoryContent
 
     f.rows = {}
+    f.categoryHeadings = {}
     local rowTop = 0
     for index, category in ipairs(f.categories) do
         if category.group then
-            heading(categoryContent, category.group, 0, -rowTop - 6)
-            rowTop = rowTop + 28
+            if rowTop > 0 then rowTop = rowTop + 14 end
+            local section = T.Font(UI.FontString(categoryContent, "GameFontNormalLarge", "accent"), 16)
+            section:SetPoint("TOPLEFT", 10, -rowTop - 6)
+            section:SetText(category.group)
+            local divider = T.Fill(categoryContent:CreateTexture(nil, "ARTWORK"), "edge")
+            divider:SetPoint("TOPLEFT", 10, -rowTop - 29)
+            divider:SetSize(contentWidth - 20, 1)
+            f.categoryHeadings[#f.categoryHeadings + 1] = section
+            rowTop = rowTop + 40
         end
         local row = CreateFrame("Button", nil, categoryContent)
         row:SetSize(contentWidth, ROW_H)
