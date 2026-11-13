@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-13
+
 ### Changed
 
 - Start achievement exports with All achievements, retaining saved scopes. Shorten the recipes setup summary and give export sections larger headings and dividers.
@@ -24,7 +26,7 @@
 - Reserve separate status lines for concurrent collectors and generation. Lock
   editing during compact generation and show a retry instruction after failure.
 - Export windows follow HammerCore Window scale when opened. Updated vendored
-  HammerCore to 0.5.2 (`3c1eeeb`) for searchable actions and current shared settings.
+  HammerCore to 0.5.2 (`476febd`) for searchable actions and current shared settings.
 
 ### Fixed
 
@@ -32,7 +34,7 @@
   Closing or reopening its chooser also closes the picker without starting work.
 
 The HL1 codec, schema, collectors, SavedVariables keys and large-output copy
-safeguards are unchanged. Development builds only; no stable release.
+safeguards are unchanged.
 
 ## [0.14.0] - 2026-11-10
 

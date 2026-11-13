@@ -38,7 +38,7 @@ end
 -- HammerCore's tools/whatsnew_check.py fails the release without one. A
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
-    { version = "0.14.0-dev1", date = "2026-11-13", items = {
+    { version = "0.15.0", date = "2026-11-13", items = {
         { title = "A clearer export workflow", text = "Larger section headings, clear record counts and short setup summaries. Achievements start with All achievements unless you saved another scope. Controls scroll into view when enabled; category names and IDs are searchable.", kind = "improved", page = "Export" },
         { title = "Copy and adjust", text = "Back to choices returns from either copy window to your saved choices. Cached storage shows observation times and partial coverage. Large exports still copy their complete payload.", kind = "improved", page = "Export" },
     } },

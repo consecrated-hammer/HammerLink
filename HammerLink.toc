@@ -2,8 +2,8 @@
 ## Title: HammerLink
 ## Notes: Export selected character data, including gear, quests and achievements, for Consecrated Hammer or your favourite chatbot.
 ## Author: consecrated-hammer
-## Version: 0.14.0
-## X-ReleaseDate: 2026-11-10
+## Version: 0.15.0
+## X-ReleaseDate: 2026-11-13
 ## Category-enUS: Data Export
 ## SavedVariables: HammerLinkDB
 ## LoadSavedVariablesFirst: 1
