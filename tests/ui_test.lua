@@ -302,6 +302,7 @@ local function run(classic)
         completeCollection = function() return immediateCollection(callback) end
         return function() completeCollection = nil end
     end
+    chooser:Show() -- exercise a visible chooser, as a player click would
     chooser.categoryScroll.GetVerticalScrollRange = function() return math.max(0, chooser.categoryContent:GetHeight() - 300) end
     switch("achievements", true)
     check(chooser.achievementPanel.shown and chooser.categoryContent.height == chooser.expandedContentHeight, "enabling achievements reveals its controls")
@@ -328,7 +329,9 @@ local function run(classic)
     check(achievementCollections == 1 and chooser.snapshot.achievements, "checking achievements collects the selected scope")
     check(chooser.rows.achievements.warning.shown and chooser.snapshot.exportOptions.achievements == true,
         "achievement size warnings must use the collected snapshot's live selection")
+    chooser.noticeMessage = "Old action confirmation"
     pick(chooser.achievementScope, "All achievements")
+    check(chooser.noticeMessage == nil, "scope change clears action confirmation")
     check(achievementOptions.scope == "all" and chooser.achievementScope.text == "All achievements")
     check(chooser.rows.achievements.count.text:find("Unavailable", 1, true), "failed achievement scans must show unavailable, not zero records")
     check(not chooser.achievementCategories.shown, "category picking is only offered for scopes that use it")
@@ -342,7 +345,9 @@ local function run(classic)
         return { { id = 92, name = "General" }, { id = 96, name = "Quests" }, { id = 15234 } }
     end
     achievementCollections = 0
+    chooser.noticeMessage = "All export categories enabled."
     wow.Click(chooser.achievementCategories)
+    check(chooser.exportWarning.text:find("Finish choosing", 1, true), "picker instruction outranks old action notice")
     local picker = HammerLinkAchievementCategories
     check(picker and picker:IsShown() and picker.title.text == "Achievement categories" and picker.closeButton,
         "the picker opens with the header bar")
@@ -447,9 +452,11 @@ local function run(classic)
         "collection failure exports explicit unavailable metadata rather than blocking all other sections")
     switch("questHistory", false)
 
+    chooser.noticeMessage = "All export categories enabled."
     namespace.StorageProgress = { bank = { active = true, processed = 0, queued = true } }
     namespace.StorageChanged()
     check(chooser.storageLoading and not generate.enabled, "queued selected storage disables generation before reads start")
+    check(chooser.exportWarning.text:find("Keep the storage window open", 1, true), "storage instruction outranks old action notice")
     namespace.StorageProgress = { bank = { active = true, processed = 80 } }
     namespace.StorageChanged()
     check(chooser.storageLoading and not generate.enabled, "selected storage scan disables export generation")
@@ -566,7 +573,13 @@ local function run(classic)
     namespace.SetExportFormat("compact")
     namespace.SetWindowOpacity(0.8)
     wow.Click(chooser.enableAll)
-    check(chooser.exportWarning.shown and chooser.exportWarning.text == "All export categories enabled.", "Enable all confirms inline")
+    check(chooser.exportWarning.shown and chooser.exportWarning.text:find("All export categories enabled.", 1, true), "Enable all confirms inline")
+    achievementDone({ entries = {}, available = true })
+    historyDone({ entries = {}, available = true })
+    check(chooser.exportWarning.text:find("about a minute", 1, true), "action notice retains achievement size guidance")
+    pick(chooser.formatButton, "Readable report")
+    check(chooser.noticeMessage == nil, "format change clears action confirmation")
+    pick(chooser.formatButton, "Import code")
     check(namespace.db.options.achievements and namespace.db.options.questHistory, "Enable all includes both optional collectors")
     wow.Click(chooser.defaults)
     check(not namespace.db.options.achievements and not namespace.db.options.questHistory, "defaults restore both opt-in categories to off")
@@ -577,6 +590,7 @@ local function run(classic)
         tabs = { { id = 1, status = "cached", capturedAt = 1799900000, reason = "Latest read incomplete" } } }
     namespace.StorageChanged()
     check(chooser.rows.bank.detail.text:find("Partly saved", 1, true), "cached partial observations are explicit")
+    check(chooser.rows.bank.detail.text:find(os.date("%Y", 1800000000), 1, true), "saved observation timestamp includes its year")
     check(chooser.rows.bank.hint:find("Tab 1: cached", 1, true) and chooser.rows.bank.hint:find("Latest read incomplete", 1, true), "tooltip retains tab coverage and capture context")
     check(chooser.snapshot.bank.capturedAt == 1800000000 and chooser.snapshot.bank.tabs[1].capturedAt == 1799900000, "display does not change observation times")
     for _, scale in ipairs({ 0.7, 1.3 }) do
@@ -606,6 +620,15 @@ local function run(classic)
     check(chooser:GetAlpha() == 1 and chooser.backdropColour[4] == 0, "text and controls stay opaque")
     check(namespace.SetWindowOpacity(0.2) and namespace.GetWindowOpacity() == 0.5, "opacity is clamped to 50%")
     check(namespace.SetWindowOpacity(1) and chooser.hcBody.colour[4] == 1)
+    switch("achievements", false)
+    chooser.categoryScroll.GetHeight = function() return 2000 end
+    chooser.categoryScroll:SetVerticalScroll(0)
+    switch("achievements", true)
+    check(chooser.categoryScroll.scrollPosition == 0, "already visible achievement options do not move the list")
+    switch("achievements", false)
+    chooser.categoryScroll.GetHeight = function() return 300 end
+    switch("achievements", true)
+    check(chooser.categoryScroll.scrollPosition == chooser.expandedContentHeight - 300, "scroll reveals the options panel within the viewport")
 end
 
 run(false)

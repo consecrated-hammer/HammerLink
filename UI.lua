@@ -459,7 +459,7 @@ local function categoryFeedback(f, category, info, checked)
         if value.available == false then state = "Unavailable" end
         if storageCategories[category.key] and value.available ~= false then
             state = value.partial and "Partly saved" or "Saved"
-            detail = state .. (value.capturedAt and (" " .. date("%d %b %H:%M", value.capturedAt)) or "")
+            detail = state .. (value.capturedAt and (" " .. date("%d %b %Y %H:%M", value.capturedAt)) or "")
                 .. ". Open it in game to update. Slots you haven't viewed aren't included."
         elseif value.available ~= false and (value.partial or value.truncated or value.changedDuringCollection
             or (type(value.coverage) == "string" and value.coverage:find("partial", 1, true))) then
@@ -543,10 +543,14 @@ local function refreshChooser(f)
     f.summary:SetText(footer)
     setButtonEnabled(f.generate, not (f.achievementLoading or f.questHistoryLoading or f.storageLoading or f.generating or f.pickingAchievements))
     refreshCollectionStatus(f)
-    if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
     f.exportWarning:SetShown(f.errorMessage ~= nil or f.noticeMessage ~= nil or f.storageLoading or f.generating or f.pickingAchievements or (ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading))
+    if f.noticeMessage then
+        local guidance = ns.IsExportEnabled("achievements") and not f.questHistoryLoading and not f.achievementLoading
+        f.exportWarning:SetText(guidance and ("Achievement exports may take about a minute. " .. f.noticeMessage) or f.noticeMessage)
+    end
+    -- Blocking instructions outrank an informational action confirmation.
+    if f.storageLoading then f.exportWarning:SetText("Reading storage in batches. Keep the storage window open.") end
     if f.pickingAchievements then f.exportWarning:SetText("Finish choosing achievement categories before generating.") end
-    if f.noticeMessage then f.exportWarning:SetText(f.noticeMessage) end
     if f.errorMessage then f.exportWarning:SetText(f.errorMessage) end
     local options = ns.GetAchievementOptions()
     local enabled = ns.IsExportEnabled("achievements")
@@ -789,7 +793,7 @@ end
 local function setFormat(f, format)
     if not ns.SetExportFormat(format) then return end
     f.format = ns.GetExportFormat()
-    f.errorMessage = nil
+    f.errorMessage, f.noticeMessage = nil, nil
     refreshChooser(f)
 end
 
@@ -799,6 +803,7 @@ function ns.ExportFormatChanged()
     local f = chooserDialog
     if not f or f.generating then return end
     f.format = ns.GetExportFormat()
+    f.noticeMessage = nil
     if f:IsShown() then refreshChooser(f) end
 end
 
@@ -907,12 +912,21 @@ local function createChooserDialog()
             if category.key == "achievements" then
                 collectAchievements(f)
                 if checked then
-                    -- Keep the newly revealed setup in view after expanding the list.
-                    if f.categoryScroll.UpdateScrollChildRect then f.categoryScroll:UpdateScrollChildRect() end
-                    local range = f.categoryScroll:GetVerticalScrollRange()
-                    if range == nil then range = f.expandedContentHeight - f.categoryScroll:GetHeight() end
-                    f.categoryScroll:SetVerticalScroll(math.max(0, range))
-                    f.categoryScroll.hcUpdateBar()
+                    local function revealOptions()
+                        if not f:IsShown() or not ns.IsExportEnabled("achievements") or not f.achievementPanel:IsShown() then return end
+                        if f.categoryScroll.UpdateScrollChildRect then f.categoryScroll:UpdateScrollChildRect() end
+                        local viewport = f.categoryScroll:GetHeight() or 0
+                        local top = (f.baseContentHeight or 0) + 14
+                        local bottom = top + (f.achievementPanel:GetHeight() or 124)
+                        local current = f.categoryScroll:GetVerticalScroll() or 0
+                        if current <= top and current + viewport >= bottom then return end
+                        local desired = math.max(0, bottom - viewport)
+                        local range = f.categoryScroll:GetVerticalScrollRange()
+                        f.categoryScroll:SetVerticalScroll(math.max(0, math.min(range or desired, desired)))
+                        f.categoryScroll.hcUpdateBar()
+                    end
+                    -- Native scroll ranges settle after the content height changes.
+                    if C_Timer and C_Timer.After then C_Timer.After(0, revealOptions) else revealOptions() end
                 end
             elseif category.key == "questHistory" then collectQuestHistory(f)
             else refreshChooser(f) end
@@ -934,7 +948,7 @@ local function createChooserDialog()
         "Which achievements the export reads.",
         achievementScopeValues, achievementScopeLabels,
         function() return ns.GetAchievementOptions().scope end,
-        function(value) ns.SetAchievementScope(value) collectAchievements(f) end)
+        function(value) f.noticeMessage = nil; ns.SetAchievementScope(value); collectAchievements(f) end)
     local hintTop = scopeTop - 18 - UI.CELL_H - 10
     local hint = line(achievementPanel)
     hint:SetPoint("TOPLEFT", UI.CELL_INSET, hintTop - 6)

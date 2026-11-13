@@ -2,14 +2,11 @@
 
 ## [Unreleased]
 
-- Keep Generate and Enable all feedback in the chooser. Show achievement options when enabled and search category IDs without displaying them.
-
-- Confirm Reset category defaults before restoring data selections; keep format and achievement setup.
-
-- Call the two formats Readable report and Import code, with clearer saved-data states and chooser help.
-
 ### Changed
 
+- Keep Generate and Enable all feedback in the chooser. Show achievement options when enabled and search category IDs without displaying them.
+- Confirm Reset category defaults before restoring data selections; keep format and achievement setup.
+- Call the two formats Readable report and Import code, with clearer saved-data states and chooser help.
 - Keep Export settings compact: saved format, the chooser action, export-window
   opacity and a reset for category selections only. Search finds every control
   and the chooser through achievements, quest history, storage and professions.

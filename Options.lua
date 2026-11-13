@@ -16,7 +16,7 @@ HC.Settings:NewPage({ name = "Export", columns = 1, description = "Saved export 
     _, y = UI.ActionButton(panel, y, "Open export chooser", function()
         HC.Settings:Hide()
         ns.ShowExport()
-    end, "Choose data categories, achievements, quest history, bank storage and professions; generate and copy a report or Import code.", "primary", 180)
+    end, "Choose data categories, achievements, quest history, bank storage and professions; generate and copy a Readable report or Import code (HL1 snapshot).", "primary", 180)
     _, y = UI.Header(panel, "Export windows", y)
     -- Percent steps: the slider's fill assumes a range wider than 1.
     _, y = UI.Slider(panel, "Window opacity", "How solid the export windows are.", y, 50, 100, 5,

@@ -71,7 +71,7 @@ for _, toc in ipairs({ "HammerLink.toc", "HammerLink_Camelot.toc" }) do
         equal(HC.Settings:Focus("Export", label) ~= nil, true, toc .. ": focus " .. label)
         indexed[label] = HC.Settings:Focus("Export", label)
     end
-    for _, query in ipairs({ "bank storage", "professions", "quest history", "achievements", "Import code" }) do
+    for _, query in ipairs({ "bank storage", "professions", "quest history", "achievements", "Import code", "HL1 snapshot" }) do
         local found = false
         for _, match in ipairs(HC.Settings:Search(query, 100)) do
             if match.page == "Export" and match.label == "Open export chooser" then found = true end
