@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Type values directly beside settings sliders; half-width controls leave more room for their labels.
+
 ## [0.15.1] - 2026-11-14
 
 - A little visual sparkle. HammerLink put on its fancy hat.
