@@ -38,6 +38,9 @@ end
 -- HammerCore's tools/whatsnew_check.py fails the release without one. A
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
+    { version = "0.15.2", date = "2026-11-15", items = {
+        { text = "“Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.", kind = "improved" },
+    } },
     { version = "0.15.1", date = "2026-11-14", items = {
         { title = "A little visual sparkle", text = "HammerLink put on its fancy hat.", kind = "improved" },
     } },

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-15
+
 - “Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.
 
 ## [0.15.1] - 2026-11-14
