@@ -38,6 +38,9 @@ end
 -- HammerCore's tools/whatsnew_check.py fails the release without one. A
 -- `page` adds a link to that settings page.
 local WHATS_NEW = {
+    { version = "0.15.3", date = "2026-11-16", items = {
+        { title = "Keeping up with the guild", text = "A chat reminder flags newer stable releases seen in your party, raid or guild. Configure Update reminders on Visibility. Development and test builds stay quiet.", kind = "improved", page = "Visibility" },
+    } },
     { version = "0.15.2", date = "2026-11-15", items = {
         { text = "“Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.", kind = "improved" },
     } },

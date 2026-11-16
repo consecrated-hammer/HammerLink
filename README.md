@@ -164,3 +164,12 @@ CurseForge release channel. The numeric tag version must match
 `HammerLink.toc`, and its release date must match the changelog heading.
 
 Embedded libraries: LibStub (public domain) and a private fork of LibDeflate 1.0.2 (zlib); their notices remain in `Libs/`. HammerLink adds per-call checkpoints to compression and printable encoding, without changing the HL1 wire format. Compact generation uses level-3 compression across frames, shows its phase and percentage, and can be cancelled by closing the chooser. With achievements enabled, allow about a minute for generation.
+
+### Update reminders
+
+Visibility > Updates > **Update reminders** tells you when another party, raid
+or guild member has a newer stable release. One chat reminder per login names
+the newer version and yours, with a pointer to CurseForge. Recent newer versions
+are remembered for up to 72 hours. This uses hidden addon messages, not a direct
+CurseForge check. Turning it off stops version sharing and reminders. Development,
+alpha, beta and test builds neither announce themselves nor show reminders.
